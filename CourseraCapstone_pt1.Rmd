@@ -1,0 +1,604 @@
+---
+title: "CapstoneCoursera_pt1"
+author: "Cas, E"
+date: "2022-11-14"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(lubridate)
+library(usmap)
+library(ggplot2)
+library(forcats)
+library(zoo)
+```
+
+#### Part 1 - Basic Exploration of US Data
+
+The New York Times (the Times) has aggregated reported COVID-19 data from 
+state and local governments and health departments since 2020 and provides
+public access through a repository on GitHub. One of the data sets provided 
+by the Times is county-level data for cumulative cases and deaths each day. 
+This will be your primary data set for the first two parts of your analysis. 
+
+County-level COVID data from 2020, 2021, and 2022 has been imported below.
+Each row of data reports the cumulative number of cases and deaths for a 
+specific county each day. A FIPS code, a standard geographic identifier, is 
+also provided which you will use in Part 2 to construct a map visualization
+at the county level for a state. 
+
+Additionally, county-level population estimates reported by the US Census 
+Bureau has been imported as well. You will use these estimates to caluclate 
+statistics per 100,000 people. 
+
+```{r, import-nyt-data, include=FALSE}
+# Import New York Times COVID-19 data
+# Import Population Estimates from US Census Bureau 
+
+us_counties_2020 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2020.csv")
+us_counties_2021 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2021.csv")
+us_counties_2022 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2022.csv")
+
+us_population_estimates <- read_csv("fips_population_estimates.csv")
+```
+
+##### Question 1 
+
+Your first task is to combine and tidy the 2020, 2021, and 2022 COVID data 
+sets and find the total deaths and cases for each day since March 15, 2020 
+(2020-03-15). The data sets provided from the NY Times also includes statistics 
+from Puerto Rico, a US territory. You may remove these observations from the
+data as they will not be needed for your analysis. Once you have tidied the 
+data, find the total COVID-19 cases and deaths since March 15, 2020. Write a 
+sentence or two after the code block communicating your results. Use inline 
+code to include the `max_date`, `us_total_cases`, and `us_total_deaths`
+variables. To write inline code use `r `. 
+
+```{r, part1_question1, echo = TRUE}
+# Combine and tidy the 2020, 2021, and 2022 COVID data sets. 
+
+
+counties_combined <- rbind(us_counties_2020, us_counties_2021, us_counties_2022)
+
+#########################################
+
+## now to find the max date 
+class(counties_combined$date)
+max_date <- max(counties_combined$date)
+## 1) check the class type, verify it is "Date" 
+## 2) use max() and save the max_date
+
+##########################################
+## 3) find the total cases since 2020-03-15
+## set a cutoff date 
+## 4) filter out Puerto Rico observations
+cutoff_date <- as.Date("2020-03-15")
+
+
+counties_filtered <- counties_combined %>%
+  filter(state != "Puerto Rico") %>%
+  filter(date >= cutoff_date)
+
+counties_filtered
+
+##########################################
+## 5) use aggregate()  to collapse rows by unique dates and sum the deaths
+## 6) repeat for cases 
+## 7) left join the two datasets 
+## 8) Tidy by renaming the columns
+
+deaths_date <- 
+aggregate(counties_filtered$deaths
+          ~ counties_filtered$date,
+          data=counties_filtered, 
+          FUN=sum)
+
+
+cases_date <- 
+  aggregate(counties_filtered$cases
+            ~ counties_filtered$date,
+            data = counties_filtered, 
+            FUN = sum)
+
+by_date_total <- left_join(
+  deaths_date,
+  cases_date, 
+  by = 
+    deaths_date$'counties_filtered$deaths_date')
+
+by_date_total <- by_date_total %>%
+  rename(
+    date = "counties_filtered$date",
+    total_deaths = "counties_filtered$deaths",
+    total_cases = "counties_filtered$cases"
+  )
+
+as_tibble(by_date_total)
+
+## 9) extract the max_date
+max_date <- max(by_date_total$date)
+
+##########################################
+## 10) calculate total deaths and cases since March 15 2020 
+writeLines("total deaths since March 15 2020:")
+print(deaths_total <- (tail(by_date_total$total_deaths, n = 1)))
+writeLines("total cases since March 15 2020")
+print(cases_total <- (tail(by_date_total$total_cases, n = 1)))
+
+```
+
+-- Communicate your methodology, results, and interpretation here -- 
+
+The total deaths calculated since March 15 2020 is 1,065,315 which seems 
+to fit the Google search results of total COVID-19 deaths in the US, 
+which is reported to be 1.07 million. Keeping in mind that we filtered out cases
+in Puerto Rico and set the starting cutoff date to be March 15 2020. 
+
+Similarly the reported total cases by The Times via Google is 97.8 million, 
+and we got 96,780,395 which also fits the expectation within reason. 
+
+I separated finding the total deaths and cases into two steps to verify along 
+each step that my results were with reason and then joined the two tables. 
+There is probably a faster way to do it using more abstraction, but I used 
+this methodology to verify at benchmarks along the way. 
+
+
+
+## As of: 
+ `max_date`
+
+
+
+##### Question 2 
+
+Create a visualization for the total number of deaths and cases in the US since 
+March 15, 2020. Before you create your visualization, review the types of plots
+you can create using the ggplot2 library and think about which plots would be 
+effective in communicating your results. After you have created your 
+visualization, write a few sentences describing your visualization. How could 
+the plot be interpreted? Could it be misleading? 
+
+```{r, part1_question2, echo = TRUE}
+### Create a visualization for the total number of US cases and deaths since 
+## March 15, 2020. 
+##########################################
+## 1) What is the best type of plot?: 
+##    We want the x-axis to be the date 
+##    two variables cases and deaths, both continuous BUT 
+##    they have a large difference 
+##    the y-axis will be a count
+## 2) Let's use geom_point() 
+## 3) first let's change the data set to have "type" as a column
+## 4) and have 3 month increments for the "date" x-axis 
+## 5) join the two ideas together, keep only the distinct observations
+plot_by_date_idea <- by_date_total %>% 
+    pivot_longer(
+      c('total_deaths', 'total_cases'), 
+        names_to = "type", 
+        values_to = "count"
+        ) %>% 
+    mutate(count_proportion = 
+             count)
+
+
+plot_by_date_idea2 <- data.frame(date=as.Date(c(plot_by_date_idea$date))) %>%
+  mutate(date2 = case_when(date >= "2022-09-15" ~ "Sep 2022 - Nov 2022",
+                           date >= "2022-06-15" ~ "Jun 2022",
+                           date >= "2022-03-15" ~ "Mar 2022",
+                           date >= "2021-12-15" ~ "Dec 2021",
+                           date >= "2021-09-15" ~ "Sep 2021",
+                           date >= "2021-06-15" ~ "Jun 2021",
+                           date >= "2021-03-15" ~ "Mar 2021", 
+                           date >= "2020-12-15" ~ "Dec 2020", 
+                           date >= "2020-09-15" ~ "Sep 2020", 
+                           date >= "2020-06-15" ~ "Jun 2020",
+                           date >= "2020-03-15" ~ "Mar 2020",
+                           TRUE ~ "other"))
+
+plot_idea_check <- 
+  left_join(
+    plot_by_date_idea, 
+    plot_by_date_idea2, 
+    by = 
+      "date"
+  )
+
+plot_idea_check <- plot_idea_check %>%
+  distinct(count_proportion, .keep_all = TRUE)
+
+##########################################
+## 6) now to plot, we will separate into two to have a meaningful scale 
+## 7) let the y-scale be free to the count 
+## 8) rename some axis and add a title
+## 9) but first, some titles for the subplot to call 
+variable_names1 <- list(
+  "total_cases" = "Total Cases",
+  "total_deaths" = "Total Deaths"
+)
+
+variable_labeller1 <- function(variable, value){
+  return(variable_names1[value])
+}
+
+## ^^^ use this code above in facet_wrap as an argument 
+
+plot_idea_check %>%
+  ggplot(aes(color = type, 
+             y = count_proportion, 
+             x = date2)) +
+  geom_point()+ 
+  facet_wrap(~ type,
+             nrow = 2,
+             scales = "free_y",
+             labeller = variable_labeller1)+
+  geom_point()+
+  scale_x_discrete(limits = 
+                     c("Mar 2020", 
+                       "Jun 2020", 
+                       "Sep 2020", 
+                       "Dec 2020", 
+                       "Mar 2021", 
+                       "Jun 2021", 
+                       "Sep 2021", 
+                       "Dec 2021", 
+                       "Mar 2022", 
+                       "Jun 2022", 
+                       "Sep 2022 - Nov 2022"
+                       ))+
+    labs(x = "Date (3 month intervals)",
+         y = "Number of Deaths             Number of Cases", 
+         color = "Type Reported")+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"))+  
+        ggplot2::labs(title = "Total COVID-19 Cases and Deaths:", 
+                      subtitle = "March 15 2020 to November 15 2020")+
+        scale_color_discrete(labels = c("Cases", "Deaths"))
+
+
+
+```
+-- Communicate your methodology, results, and interpretation here -- 
+This visualization was tricky because plotting the two variables on the 
+same plot made a meaningless graph with deaths on the floor of the plot 
+even when I tried to normalize by dividing. The best option was to separate the
+two as long as it was clear they use two different y-scales. 
+I think my plot conveys the difference with colors, while also conveying 
+the difference in the total of each type for each 3 month interval. 
+In some ways I made the dataset untidy to work with them, 
+maybe there was a better way without changing the dataset. 
+
+##### Question 3
+
+While it is important to know the total deaths and cases throughout the 
+COVID-19 pandemic, it is also important for local and state health officials 
+to know the the number of new cases and deaths each day to understand how 
+rapidly the virus is spreading. Using the table you created in Question 1, 
+calculate the number of new deaths and cases each day and a seven-day average 
+of new deaths and cases. Once you have organized your data, find the days that 
+saw the largest number of new cases and deaths. Write a sentence or two after
+the code block communicating your results.
+
+```{r, part1_question3, echo = TRUE}
+## 1) we want the difference in deaths starting on the second day 
+## 2) we will use a for loop to iterate through the column 
+## 3) if the  the i iteration is equal to 1, extract the value AT i
+##    *note the difference between the iteration and value of i in syntax* 
+## ** I assumed the first day March 15 2020 was the first value of cases 
+##    so instead of saving 0, I saved 68, treating it like the first day ever 
+## 4) ELSE we will take the value at [i] and subtract the value of the 
+##    previous i iteration
+## 5) save the results in a vector which we can add to our data set 
+## 5b) we must create the empty vector first specifying type and length!
+## 6) do the same for new cases 
+
+new_deaths <- vector("double", length(by_date_total$total_deaths))
+
+for(i in 1:length(by_date_total$total_deaths)){
+ if(i == 1){ 
+    new_deaths <- (by_date_total$total_deaths[i])
+ }
+  else{
+    new_deaths <- append(new_deaths,
+            by_date_total$total_deaths[i] - by_date_total$total_deaths[i - 1])
+  }
+}
+
+by_date_total$new_deaths <- new_deaths
+
+## REPEAT FOR CASES 
+
+new_cases <- vector("double", length(by_date_total$total_cases))
+for(i in 1:length(by_date_total$total_cases)){
+ if(i == 1){ 
+    new_cases <- (by_date_total$total_cases[i])
+ }
+  else{
+    new_cases <- append(new_cases,
+            by_date_total$total_cases[i] - by_date_total$total_cases[i - 1])
+  }
+}
+
+by_date_total$new_cases <- new_cases
+
+
+##########################################
+## 7) Now, Let's find the 7 day average 
+## 8) use zoo: rollmeanr 
+## 9) set dataset, new column name, interval for mean, and 
+##    fill = NA for days before the 7th day
+## 10) repeat for cases
+       
+by_date_total <-                
+transform(by_date_total,
+          avg7_deaths = rollmeanr(new_deaths, 7, fill = NA))
+
+by_date_total <- 
+transform(by_date_total,
+          avg7_cases = rollmeanr(new_cases, 7, fill = NA))
+
+as_tibble(by_date_total)
+##########################################
+## 11)  Now find the days with the largest number of new cases and deaths
+max_new_cases <- max(by_date_total$new_cases)
+max_new_deaths <- max(by_date_total$new_deaths)
+
+date_max_cases <- which(by_date_total == max_new_cases, arr.ind = TRUE)
+date_max_cases <- by_date_total[date_max_cases[1], 1]
+
+date_max_deaths <- which(by_date_total == max_new_deaths, arr.ind = TRUE)
+date_max_deaths <- by_date_total[date_max_deaths[1], 1]
+
+writeLines("Highest number of new COVID cases & date:")
+max_new_cases
+date_max_cases
+writeLines("Highest number of new COVID deaths & date:")
+max_new_deaths
+date_max_deaths
+
+## this code could be made into a function
+max_finder <- function(x){
+  
+}
+
+```
+-- Communicate your methodology, results, and interpretation here -- 
+  Alright, so I wrote all the steps before my code which explains my 
+process already, BUT nonetheless, let's be extra clear. 
+First we wanted the difference between the current day and previous day, AND 
+I treated March 15 2020 and the 68 cases as the first day ever, instead of zero 
+because if I treated it as zero the following plot and calculations for 
+the 7 day avg. would not represent the number of cases we had on that date. 
+Anyways we used a for loop to accomplish that which was pretty simple just 
+followed the standard practice of setting up the vector which stored the 
+results of our for loop first then using and if statement followed by an 
+else statement since there were really only two possible conditions: 
+the first day exception and every date after that needed the difference. 
+Luckily, append, and calculating with indexing works just fine. 
+  Next we used the zoo package to calculate the rolling 7 day avg. using 
+rollmeanr, which is convenient because we can specify it to fill NA values. 
+Lastly, we used max() to find max deaths and max cases, then we used 
+which() to find the corresponding row number, fed that into an index specifying 
+the first column which is date, and printed it out in a clear way with 
+both the highest number of deaths and cases as well as the date for each!
+This last part could be made into a function  but since we only did it twice 
+I didnt't. 
+
+##### Question 4
+```{r, part1_question4, echo = TRUE}
+# Create a new table, based on the table from Question 3, and calculate the 
+# number of new deaths and cases per 100,000 people each day and a seven day 
+# average of new deaths and cases per 100,000 people. 
+
+## YOUR CODE HERE ##
+## 1) Inspect the US population table 
+## 2) I don't see what needs to by tidy-ed, we can use as it 
+## 3) use aggregate to find total population based on each "Year"
+
+pop_total <- 
+  aggregate(us_population_estimates$Estimate
+            ~ us_population_estimates$Year, 
+            data = us_population_estimates, 
+            FUN = sum)
+pop_total <- pop_total %>%
+  rename(year = 1,
+         estimate = 2)
+
+## 4) find the last day of 2020 
+## 5) use the last day to set the limit of our per capita calc. for loop
+
+last_day_2020 <- which(by_date_total == "2020-12-31", arr.ind = TRUE)
+last_day_2020
+
+## 6) run the for loop 
+
+cases_100k <- vector("double", length(by_date_total$new_cases))
+
+  for(i in 1: length(by_date_total$new_cases)){
+    if(i <= last_day_2020[1,1]){
+      cases_100k[i] <- new_cases[i]/ (pop_total[1,2]) * 100000
+    }
+    else{
+      cases_100k[i] <- new_cases[i] / pop_total[2,2] * 100000
+    }
+  }
+
+## 7) REPEAT FOR DEATHS
+deaths_100k <- vector("double", length(by_date_total$new_deaths))
+ for(i in 1: length(by_date_total$new_deaths)){
+    if(i <= last_day_2020[1,1]){
+      deaths_100k[i] <- new_deaths[i]/ (pop_total[1,2]) * 100000
+    }
+    else{
+      deaths_100k[i] <- new_deaths[i] / pop_total[2,2] * 100000
+    }
+  }
+
+
+## 8) add vectors to dataframe 
+by_date_100k <-by_date_total 
+by_date_100k$cases_100k <- cases_100k
+by_date_100k$deaths_100k <- deaths_100k
+
+##########################################
+## 9) now the 7 day avg. per 100,000 people
+
+by_date_100k <-                
+transform(by_date_100k,
+          avg7_deaths_100k = rollmeanr(deaths_100k, 7, fill = NA))
+
+by_date_100k <-                
+transform(by_date_100k,
+          avg7_cases_100k = rollmeanr(cases_100k, 7, fill = NA))
+
+as_tibble(by_date_100k)
+
+```
+-- Communicate your methodology, results, and interpretation here -- 
+Well, we began by calculating the population total for each year, 
+BUT we don't have the correct population count for 2022, so there will be an 
+error in that data because it will use the population estimate of 2021. 
+Nonetheless, it shouldn't be too big of an error, the population of the US 
+is not growing at an outstanding rate like other countries. 
+Anyways, we found the last day of 2020 in the dataframe and use that to index 
+our for loop that calculate the cases per 100k because at that point we will use 
+a different population estimate via an else statement. 
+Once again, these steps since they were repeated for cases and deaths, 
+could likely be coded into functions BUT because I wanted to stop between each 
+step to verify that what was run and output made sense logically, this works. 
+
+
+#### Question 5
+```{r, part1_question5, echo = TRUE, include=TRUE}
+# Create a visualization to compare the seven-day average cases and deaths
+## per 100,000 people. 
+## 1) let's organize a table like before that has a "type" 
+## which means using pivot_longer() to combine:
+## avg7_cases_100k & avg7_deaths_100k
+
+plot_7avg_by_100k <- by_date_100k %>%
+  pivot_longer(
+    c('avg7_deaths_100k', 'avg7_cases_100k'), 
+    names_to = "avg7_per100k",
+    values_to = "avg7_per100k_value"
+  )
+
+## 2) select the values we will be working with, we see there is a repeat
+##    so the first 14 values are NA 
+plot_7avg_by_100k %>%
+  select(date, avg7_per100k, avg7_per100k_value)
+
+## 3) change the date into a 3-month interval like before
+plot_7avg100k_interval <- data.frame(date=as.Date(c(plot_by_date_idea$date))) %>%
+  mutate(date2 = case_when(date >= "2022-09-15" ~ "Sep 2022 - Nov 2022",
+                           date >= "2022-06-15" ~ "Jun 2022",
+                           date >= "2022-03-15" ~ "Mar 2022",
+                           date >= "2021-12-15" ~ "Dec 2021",
+                           date >= "2021-09-15" ~ "Sep 2021",
+                           date >= "2021-06-15" ~ "Jun 2021",
+                           date >= "2021-03-15" ~ "Mar 2021", 
+                           date >= "2020-12-15" ~ "Dec 2020", 
+                           date >= "2020-09-15" ~ "Sep 2020", 
+                           date >= "2020-06-15" ~ "Jun 2020",
+                           date >= "2020-03-15" ~ "Mar 2020",
+                           TRUE ~ "other"))
+## 4) left join the two tables 
+plot_avg7_100k_check <- 
+  left_join(
+    plot_7avg_by_100k,
+    plot_7avg100k_interval,
+    by = 
+      "date"
+  )
+
+plot_avg7_100k_check <- plot_avg7_100k_check %>%
+  select(date, avg7_per100k, avg7_per100k_value, date2)
+
+## 5) keep only the distinct values 
+##    this erases the NA values from March 16 to March 20
+
+plot_avg7_100k_check <- plot_avg7_100k_check %>%
+  distinct(avg7_per100k_value, .keep_all = TRUE)
+## 5b) replace the NA values with 0 for the plot 
+plot_avg7_100k_check[is.na(plot_avg7_100k_check)] <- 0
+
+## 6) now plot
+## 7) create variable function to call on facet_wrap
+variable_names2 <- list(
+  "avg7_cases_100k" = "Cases (per 100,000 people)" ,
+  "avg7_deaths_100k" = "Deaths (per 100,000 people)"
+)
+
+variable_labeller2 <- function(variable, value){
+  return(variable_names2[value])
+}
+
+plot_avg7_100k_check %>%
+ggplot(aes(x = date, 
+           y = avg7_per100k_value, 
+          fill = avg7_per100k))+
+         geom_bar(stat = 'identity',
+                  size = .25, na.rm = TRUE)+
+  facet_wrap(~ avg7_per100k,
+             nrow =  2, 
+             scales = "free", labeller = variable_labeller2)+
+  labs(x = "Date", 
+       y = "Number of Deaths         Number of Cases", 
+       fill = "Type Reported")+
+  theme(title = element_text(face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"))+  
+        ggplot2::labs(title =
+              "       7-Day Average of COVID-19 Cases & Deaths 
+                          (per 100,000 people) ", 
+               subtitle = "                 March 15 2020 to November 15 2020")+
+        scale_fill_discrete(labels = c("Cases", "Deaths"))+
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months")
+
+```
+
+-- Communicate your methodology, results, and interpretation here -- 
+Alright, this plot resembles the first plot in that I separated the 
+two report types to present a more meaningful y-axis scale. This time I used 
+scale_x_date because I learned it existed and it made it much more simple 
+to scale the date quickly. I added the scale = "free" for both the 
+x and y in order to present the date again on the cases plot.
+Overall I think it conveys the difference between the two as well as the 
+values through time which is quite different from the first plot that just 
+shows the total which just increases and doesn't tell us anything about the
+infection rate or the proportion of the population being affected by COVID. 
+This graph tells us the highest rate of infection is in Jan 2022 via the cases
+which matches our max_cases() and similarly it shows highest deaths matching 
+out max_deaths(). This plot also matches around the time the omicron variant 
+spread in Nov. 2021 not too long after there is the biggest spike in cases.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

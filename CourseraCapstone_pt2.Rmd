@@ -1,0 +1,999 @@
+---
+title: "CapstoneCoursera_pt2"
+author: "Castelan Moreno, Emily"
+date: "2022-11-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(tidyverse)
+library(lubridate)
+library(usmap)
+library(ggplot2)
+library(forcats)
+library(zoo)
+library(patchwork)
+library(stringr)
+library(ggrepel)
+library(usmap)
+library(cowplot)
+library(gridExtra)
+```
+## THE DATASETS
+```{r, import-nyt-data, include=FALSE}
+# Import New York Times COVID-19 data
+# Import Population Estimates from US Census Bureau 
+
+us_counties_2020 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2020.csv")
+us_counties_2021 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2021.csv")
+us_counties_2022 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2022.csv")
+
+us_population_estimates <- read_csv("fips_population_estimates.csv")
+```
+
+##### Part 2 - US State Comparison
+
+While understanding the trends on a national level can be helpful in 
+understanding how COVID-19 impacted the United States, it is important to 
+remember that the virus arrived in the United States at different times. 
+For the next part of your analysis, you will begin to look at COVID related 
+deaths and cases at the state and county-levels.
+
+
+##### Question 1
+
+Your first task in Part 2 is to determine the top 10 states in terms of total
+deaths and cases between March 15, 2020, and December 31, 2021.
+
+Once you have both lists, briefly describe your methodology and your results.
+
+```{r, part2_question1, echo=TRUE, include=TRUE}
+# Determine the top 10 states in terms of total deaths and cases between 
+# March 15, 2020, and December 31, 2021. To do this, transform your combined 
+# COVID-19 data to summarize total deaths and cases by state up to 
+# December 31, 2021.
+## setting up our counties_combined again 
+counties_combined <- rbind(us_counties_2020, us_counties_2021, us_counties_2022)
+
+cutoff_date <- as.Date("2020-03-15")
+
+
+counties_filtered <- counties_combined %>%
+  filter(state != "Puerto Rico") %>%
+  filter(date >= cutoff_date)
+
+counties_filtered
+
+## 1) view the us_population_estimates data set and determine the primary key 
+## this code returns a 0 
+primary_key <- us_population_estimates %>%
+  count(fips, Year, Estimate) %>%
+  filter(n>1)
+
+## 2) set the second cutoff date as Dec 31 2021 
+## **we want to set the date equal to the cutoff date because that is already 
+## the total number of cases and deaths, whereas if we change use "<=" then 
+## it will aggregate all the totals again and it will overcounted 
+cutoff_date_dec21 <- as.Date('2021-12-31')
+counties_filtered2 <-  counties_filtered %>%
+  filter(date == cutoff_date_dec21)
+
+## 3) use this new data set to find the total cases and deaths by state via 
+## aggregate() 
+
+state_cases <- 
+  aggregate(counties_filtered2$cases
+            ~ counties_filtered2$state,
+            data = counties_filtered2,
+           FUN = sum)
+
+
+state_deaths <- 
+  aggregate(counties_filtered2$deaths
+            ~ counties_filtered2$state,
+           data = counties_filtered2,
+           FUN = sum)
+
+
+
+
+## 4) Rename the columns to review the data without confusion and simplify next
+## joining step 
+
+state_deaths <- state_deaths %>%
+  rename(
+    state = 'counties_filtered2$state', 
+    deaths = 'counties_filtered2$deaths'
+  )
+
+state_cases <- state_cases %>%
+  rename(
+    state = 'counties_filtered2$state',
+    cases = 'counties_filtered2$cases'
+  )
+
+## 5) use an inner join to join the two totals by state 
+
+by_state_total <- inner_join(
+  state_deaths,
+  state_cases,
+  by = "state")
+
+by_state_total<- by_state_total%>%
+  filter(
+    state != "American Samoa"
+  )
+
+## 6) I don't know why the output has the date, but let's add it back in just to 
+## match it 
+## 7) arrange the states in descending order, we can use two columns 
+## as arguments
+
+by_state_total <- by_state_total %>%
+  mutate(
+    date = cutoff_date_dec21
+  ) %>%
+  arrange(
+    desc(deaths), cases
+  )
+
+## 8) take only the top 10 and print out the answer
+
+top10_states <- by_state_total %>%
+  head(n=10)
+
+as_tibble(top10_states)
+
+writeLines("10 states with highest COVID-19 deaths and cases, 
+           in descending order")
+print(top10_states$state)
+
+
+```
+-- Communicate your methodology, results, and interpretation here -- 
+I initially coded this response wrong because I aggregated the total deaths and 
+cases without filtering for only the cutoff date Dec. 31st 2021 which 
+printed a result that was WAY OVER the correct values. This is because it was 
+overcounting the data and it was apparent because a single state had the same 
+number of cases for the whole US. Anyways, once I realized that I filtered the
+data set for just the single date, which already has the total. Then from 
+there I used aggregate() to collapse the rows by state for the cases variable 
+then the deaths variable. I did this to verify at each step that it was done 
+correctly then I joined the two results using an inner join. I added the 
+date column back into my table, but I don't think it serves much of a purpose 
+OTHER than to mark the date the data set is counting up to, which I guess could 
+have helped me see my initial mistake. Next, I arranged the data set in 
+descending order by deaths and cases as the two arguments and printed the top 10. 
+
+##### Question 2
+
+Determine the top 10 states in terms of deaths per 100,000 people and cases 
+per 100,000 people between March 15, 2020, and December 31, 2021.
+
+
+Once you have both lists, briefly describe your methodology and your results. 
+Do you expect the lists to be different than the one produced in Question 1? 
+Which method, total or per 100,000 people, is a better method for reporting 
+the statistics? 
+
+```{r, part2_question2, echo=TRUE, include=TRUE}
+# Determine the top 10 states in terms of deaths and cases per 100,000 people
+# between March 15, 2020, and December 31, 2021. You should first tidy and 
+# transform the population estimates to include population totals by state. 
+# Use your relational data verbs (e.g. full_join()) to join the population 
+# estimates with the cases and death statistics using the state name as a key.
+# Then, use case_when() and grepl() to add a population column to your table 
+# that only includes the estimated population for the associated year. Finally,
+# mutate your table to calculate deaths and cases per 100,000 people and 
+# summarize by state. 
+
+## 1) inspect and tidy the us_population_estimates
+## as_tibble(us_population_estimates)
+## 2) so let's group_by() and summarize by the state and year 
+## otherwise we would get a total of the two years! and over count 
+state_pop_est <- us_population_estimates %>%
+  group_by(STNAME, Year) %>%
+    summarise(pop_estimate = sum(Estimate))
+state_pop_est <- state_pop_est %>%
+  rename(
+    state = 'STNAME'
+  )
+
+## 3) use the full_join() to join the table to our previous table 
+## we will only need values for 2021 
+top10_per100k <- full_join(
+  state_pop_est,
+  by_state_total,
+  by = "state"
+) %>%
+  filter(Year == '2021')
+  
+
+## 4) divide the deaths and cases total by the corresponding Year for pop. 
+## estimate for each state then multiple by 100,000
+
+
+top10_per100k <- top10_per100k %>%
+  mutate(
+    deaths_per100k = deaths / pop_estimate * 100000
+  ) %>%
+  mutate(
+    cases_per100k = cases / pop_estimate * 100000
+  )
+
+## 5) arrange in descending order by cases_per100k
+## then take the top 10 
+## 5b) I noticed the results are different by deaths than by cases
+## so I will do both results, unlike the example table which arranges by cases
+
+top10_cases_per100k <- top10_per100k %>%
+  arrange(
+    desc(cases_per100k)
+  ) %>%
+  head(n = 10)
+as_tibble(top10_cases_per100k)
+
+top10_deaths_per100k <- top10_per100k %>%
+  arrange(
+    desc(deaths_per100k)
+  ) %>%
+  head(n = 10)
+as_tibble(top10_deaths_per100k)
+
+## 6) print out the results 
+writeLines("10 states with highest cases per 100,000 people:")
+print(top10_cases_per100k$state)
+writeLines("10 cases with highest number of deaths per 100,000 people:")
+print(top10_deaths_per100k$state)
+
+```
+-- Communicate your methodology, results, and interpretation here -- 
+These results are very different from the results of the first data set which 
+only calculated the total cases and deaths. This data set is much more valuable 
+for researching a virus because it tells us the rate of infection and tells 
+us where and how we need to allocate resources as well as how the population is 
+responding to measures like vaccines and social distancing for COVID 
+specifically. Additionally the other table may under estimate the rate of 
+infection of smaller states because the total is simply lower due to population.
+I think this statistical approach that uses per capita is much more appropriate
+because a raw total just reiterates what we already know that there are more 
+people in states like California, Texas, and New York. 
+
+##### Question 3
+
+Now, select a state and calculate the seven-day averages for new cases and 
+deaths per 100,000 people. Once you have calculated the averages, create a
+visualization using ggplot2 to represent the data. 
+
+```{r, part2_question3, echo=TRUE, include=TRUE}
+## 1) of course I have to pick California my home state
+## 2) first calculate the number of new cases 
+california_only <- counties_combined %>%
+  filter(state == "California") 
+
+california_by_new <- california_only %>%
+  group_by(date) %>%
+  summarise(
+    deaths_CA = sum(deaths),
+    cases_CA = sum(cases)
+  )
+## 3) ^^ this gave us the total but now let's calculate the difference 
+## between each date using a for loop
+## 3b) first set up an empty vector of double class to store the values
+## 3c) calculate the difference using a for loop 
+## 3d) add the resulting vector to our data set 
+  
+new_CA_deaths <- vector("double", length(california_by_new$deaths_CA))
+
+for(i in 1:length(california_by_new$deaths_CA)){
+ if(i <= 1){ 
+    new_CA_deaths <- (california_by_new$deaths_CA[i])
+ }
+  else{
+    new_CA_deaths <- append(new_CA_deaths,
+            california_by_new$deaths_CA[i] - california_by_new$deaths_CA[i - 1])
+  }
+}
+
+california_by_new$new_CA_deaths <- new_CA_deaths
+
+## 4) Repeat for cases
+
+new_CA_cases <- vector("double", length(california_by_new$cases_CA))
+for(i in 1:length(california_by_new$cases_CA)){
+ if(i <= 1){ 
+    new_CA_cases <- (california_by_new$cases_CA[i])
+ }
+  else{
+    new_CA_cases <- append(new_CA_cases,
+            california_by_new$cases_CA[i] - california_by_new$cases_CA[i - 1])
+  }
+}
+
+california_by_new$new_CA_cases <- new_CA_cases
+
+## 5) now calculate the 7-day average using rollmeanr
+## specify for NA values to be filled
+california_by7 <- 
+  transform(california_by_new,
+    avg7_deaths = rollmeanr(new_CA_deaths, 7, fill = NA)
+  )
+
+california_by7 <- 
+  transform(california_by7, 
+            avg7_cases = rollmeanr(new_CA_cases, 7, fill = NA))
+
+## 6) calculate the 7-day avg for each variable per 100,000 people 
+## utilize the population from before but filter for only the CA values 
+## 6b) set up the last dates for each year to define the limits we'll use
+CA_pop_est <- state_pop_est %>%
+  filter(state == "California")
+
+last_day2020 <- as.Date('2020-12-31')
+last_day2021 <- as.Date('2021-12-31')
+
+## 6c) find the last day of 2020 in california_by7
+
+last_day2020 <- which(california_by7 == "2020-12-31", arr.ind = TRUE)
+
+## it is in row 342 column 1, we will use "last_day[1, 1]" through i 
+
+## 7) use the pop. est in a for loop to check the date, we can 
+## use the pop. est of 2021 to calculate values for 2022, but just know 
+## that the data may be over representing the number of cases and deaths 
+## per 100k people as we can assume the pop. of CA would be higher in 2022
+
+#####################################################
+#####################################################
+#####################################################
+
+cases_CA_7day_100k <- vector("double", length(california_by7$avg7_cases))
+avg7_cases <- california_by7$avg7_cases
+for( i in 1: length(california_by7$avg7_cases)){
+  if( i <= last_day2020[1,1]){
+    cases_CA_7day_100k[i] <- (avg7_cases[i] / (CA_pop_est[1,3]) * 100000)[[1]][1]
+  }
+  else{
+    cases_CA_7day_100k[i] <- (avg7_cases[i] / (CA_pop_est[2,3]) * 100000)[[1]][1]
+  }
+}
+## print(cases_CA_7day_100k)
+
+
+## 7b) repeat for deaths
+deaths_CA_7day_100k <- vector("double", length(california_by7$avg7_deaths))
+avg7_deaths <- california_by7$avg7_deaths
+
+for(i in 1: length(california_by7$avg7_deaths)){
+  if(i <= last_day2020[1,1]){
+    deaths_CA_7day_100k[i] <- (avg7_deaths[i] / (CA_pop_est[1,3]) * 100000)[[1]][1]
+  }
+  else{
+    deaths_CA_7day_100k[i] <- (avg7_deaths[i] / CA_pop_est[2,3] * 100000)[[1]][1]
+  }
+}
+## print(deaths_CA_7day_100k)
+
+## 8) add vectors to data set 
+CA_7day_100k <- california_by7
+CA_7day_100k$cases_7day_100k <- cases_CA_7day_100k
+CA_7day_100k$deaths_7day_100k <- deaths_CA_7day_100k
+
+## 8) create a plot data set with only the two variables we need
+## change to two columns to use facet_wrap easily 
+CA_plot <- CA_7day_100k %>%
+  select(date, cases_7day_100k, deaths_7day_100k) %>%
+  pivot_longer(c('cases_7day_100k','deaths_7day_100k'),
+               names_to = 'type',
+               values_to = 'number_reported'
+  )
+
+## 8b) 
+variable_names <- list(
+  "cases_7day_100k" = "Cases (per 100,000 people)" ,
+  "deaths_7day_100k" = "Deaths (per 100,000 people)"
+)
+
+variable_labeller <- function(variable, value){
+  return(variable_names[value])
+}
+
+## 9) now create a visualization
+CA_plot_2 <- CA_plot %>% ggplot(
+  aes(x = date,
+      y = number_reported,
+      fill = type)) +
+         geom_bar(stat = 'identity',
+                  size = .25, na.rm = TRUE)+
+    facet_wrap(~ type,
+             nrow =  2, 
+             scales = "free",
+             labeller = variable_labeller) +
+  labs(x = "Date", 
+       y = "7-day avg. Deaths       7-day avg. Cases", 
+       fill = "Type Reported:") +
+  theme(title = element_text(face = "bold",
+                             size = 10),
+        axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold")) +
+  ggplot2::labs(title =
+              "        California COVID-19 Deaths & Cases:
+              7-day avg. per 100,000 people") + 
+  scale_fill_discrete(labels = c("Cases", "Deaths")) +
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months",
+               limits = as.Date(c('2020-03-15','2022-10-15')))
+CA_plot_2
+
+```
+-- Communicate your methodology, results, and interpretation here -- 
+First, we found the number of new cases & deaths per day for California
+via a for loop method for each variable. I did this 
+without setting date limits just to see the results for all of COVID-19 
+history in California. Then, we used that new data set to find the 7-day rolling
+average of new cases & deaths in california using the zoo package rollmeanr(). 
+Next we used another for loop to calculate the avg. per 100k people, which was
+odd because my for loop was storing my results in a listed column, therefore
+nesting the results, but then I figured out if I just called the value 
+for each calculation then store it into the vector that it worked correctly. 
+Then finally we used the data set variables that we needed to create a 
+plot data set, set up to make using facet_wrap faster. Finally we plotted
+and we can see the that highest number of deaths and cases do have a strong 
+correlation across time. We can also see that the number of cases and deaths 
+in California strongly resembles our first plot for the whole United States, 
+except for the first initial spike in April 2020 for deaths that we saw 
+on the plot for the whole US. I used the same population from 2021 for CA
+as for 2022 because the data set only went up to 2021, so it may be over
+representing the number of cases and deaths. I see there are values 
+that are negative in the deaths due to the difference in cases being less
+between the two successive dates, which could be misleading and confusing, 
+but perhaps we could account for this by setting an extra condition 
+while calculating the new deaths and cases, where is there is a negative
+difference to just set it to zero, but that would be changing the data we
+were provided. I double checked the total number of cases and deaths for 
+COVID-19 in CA all-time and the numbers are correct so I would assume or
+data point for each date are also correct. 
+
+
+##### Question 4
+
+Using the same state, identify the top 5 counties in terms of deaths and 
+cases per 100,000 people. 
+```{r, part2_question4, echo=TRUE, include=TRUE}
+## 1) filter for the last date of 2021 because that is when we 
+## have the pop. est.
+max_date = as.Date('2021-12-31')
+
+CA_counties <- california_only %>%
+  filter(date == as.Date(max_date)) %>%
+  arrange(desc(deaths), cases)
+
+## 2) get the pop. est. 
+CA_counties_pop <- us_population_estimates %>%
+  filter(STNAME == "California") %>%
+  filter(Year == 2021) %>%
+  rename(county = CTYNAME) %>%
+  select(county, Year, Estimate)
+
+## 2b) the counties all have the word county after it which needs to be changed
+## use gsub() to select the pattern and replace it with nothing in the column
+
+CA_counties_pop$county <- 
+  gsub("County", "", as.character(CA_counties_pop$county))
+
+
+## 3) apply the pop_est to the data set to calculate the cases and deaths 
+## per 100,000 people, just add the columns in to the data set, make sure 
+## they are in alphabetical order to align them correctly
+CA_counties <- CA_counties %>% 
+  arrange(county) %>%
+  select(state, county, cases, deaths, fips)
+
+CA_counties$year <- CA_counties_pop$Year
+CA_counties$estimate <- CA_counties_pop$Estimate
+
+## 4) calculate the number of cases and deaths per 100k 
+
+CA_counties <- CA_counties %>%
+  mutate(
+    cases_per100k = cases / estimate * 100000
+  ) %>%
+  mutate(
+    deaths_per100k = deaths / estimate * 100000
+  )
+
+CA_counties_5 <- CA_counties %>%
+  arrange(desc(cases_per100k), deaths_per100k) %>%
+  head(n = 5)
+
+as_tibble(CA_counties_5)
+
+writeLines("Top 5 counties in California with highest total 
+           cases and deaths per 100,000 people as of Dec. 31 2021:
+           (in desceding order)")
+print(CA_counties_5$county)
+  
+```
+
+-- Communicate your methodology, results, and interpretation here -- 
+Well, this was interesting for me to see as a California native. The
+top 5 counties per 100k is strikingly different than the total cases and 
+deaths ranking. The only county with a large population among the top 5 
+is San Bernardino, but the big counties like LA, San Diego, Orange, and 
+Santa Clara aren't aren't on there and even LA isn't on the list until #7. 
+I decided to use Dec 31 2021 as the date for analysis because it would have
+the most accurate results since we only have the pop. estimates up to 2021 
+AND we used total cases and deaths not the new cases and deaths. I wonder
+if the results would be different if calculates for 2020 and 2022. 
+
+
+##### Question 5
+
+Modify the code below for the map projection to plot county-level deaths and 
+cases per 100,000 people for your state. 
+
+```{r, part2_question5, echo=TRUE, include=TRUE}
+
+plot_CA <- plot_usmap(regions = "county",
+           include = "California",
+           data = CA_counties,
+           values = "deaths_per100k", 
+           coor = 'blue', 
+           labels = FALSE,
+           label_color = "black",
+           color = "black",
+           linewidth = 2)+
+    scale_fill_continuous(low = 'white', 
+                        high = 'blue',
+                        name = "Deaths per 100,000")+
+  theme(legend.position = c(.99,.4),
+        legend.background = element_rect(fill = "grey",
+                                         size = .5, 
+                                         linetype = "solid",
+                                         color = "darkblue"),
+        legend.text = element_text(color = "black", face = "bold"),
+        title = element_text(face = "bold"))+
+  labs(title = "California Counties COVID-19 Deaths per 100k People:",
+        subtitle = "       based on 2021 reports and population estimates")
+
+plot_CA
+  
+  
+```
+-- Communicate your methodology, results, and interpretation here -- 
+Alright, this is pretty straight forward we just plugged in the 
+data set we made in the previous question. I tried including the labels but 
+it made the map overwhelming. I am not surprised that Imperial County has the 
+highest deaths per 100k because it is a very poor county where the poverty rate 
+is about 25%. I think that in counties like that there were less COVID resources
+like vaccines. An interesting test would be to see if there is a correlation 
+between poverty rates and COVID deaths by county. 
+
+
+##### Question 6
+
+Finally, select three other states and calculate the seven-day averages 
+for new deaths and cases per 100,000 people for between March 15, 2020, 
+and December 31, 2021. 
+
+```{r, part2_question6, echo=TRUE, include=TRUE}
+## 1) I will pick Colorado, Maryland, and New York
+###############################################################
+###############################################################
+## 2) COLORADO 
+## find the difference in deaths and cases
+CO_counties_diff <- counties_combined %>%
+  filter(state == "Colorado") %>%
+  filter(date >= as.Date("2020-03-15")) %>%
+  filter(date <= as.Date("2021-12-31")) %>%
+  group_by(date) %>%
+  summarise(
+    deaths_CO = sum(deaths),
+    cases_C0 = sum(cases)
+  )
+
+new_CO_deaths <- vector("double", length(CO_counties_diff$deaths_CO))
+
+for(i in 1:length(CO_counties_diff$deaths_CO)){
+ if(i <= 1){ 
+    new_CO_deaths <- (CO_counties_diff$deaths_CO[i])
+ }
+  else{
+    new_CO_deaths <- append(new_CO_deaths,
+            CO_counties_diff$deaths_CO[i] - CO_counties_diff$deaths_CO[i - 1])
+  }
+}
+
+CO_counties_diff$new_deaths_CO<- new_CO_deaths
+
+new_CO_cases <- vector("double", length(CO_counties_diff$cases_C0))
+for(i in 1:length(CO_counties_diff$cases_C0)){
+ if(i <= 1){ 
+    new_CO_cases <- (CO_counties_diff$cases_C0[i])
+ }
+  else{
+    new_CO_cases <- append(new_CO_cases,
+            CO_counties_diff$cases_C0[i] - CO_counties_diff$cases_C0[i - 1])
+  }
+}
+
+CO_counties_diff$new_cases_C0 <- new_CO_cases
+
+## use the new cases and deaths to find the 7day avg. 
+
+CO_by7 <- 
+  transform(CO_counties_diff,
+    avg7_deaths = rollmeanr(new_cases_C0, 7, fill = NA)
+  )
+
+CO_by7 <- 
+  transform(CO_by7, 
+            avg7_cases = rollmeanr(new_deaths_CO, 7, fill = NA))
+
+## use the 7-day avg. to calc. the value per 100k people
+## which will depend on the year 
+CO_pop_year <- state_pop_est %>%
+  filter(state == "Colorado") 
+
+cases_CO_7day_100k <- vector("double", length(CO_by7$avg7_cases))
+avg7_cases <- CO_by7$avg7_cases
+for( i in 1: length(CO_by7$avg7_cases)){
+  if( i <= last_day2020[1,1]){
+    cases_CO_7day_100k[i] <- (avg7_cases[i] / (CO_pop_year[1,3]) * 100000)[[1]][1]
+  }
+  else{
+    cases_CO_7day_100k[i] <- (avg7_cases[i] / (CO_pop_year[2,3]) * 100000)[[1]][1]
+  }
+}
+## print(cases_CO_7day_100k)
+## 7b) repeat for deaths
+deaths_CO_7day_100k <- vector("double", length(CO_by7$avg7_deaths))
+avg7_deaths <-CO_by7$avg7_deaths
+
+for(i in 1: length(CO_by7$avg7_deaths)){
+  if(i <= last_day2020[1,1]){
+    deaths_CO_7day_100k[i] <- (avg7_deaths[i] / (CO_pop_year[1,3]) * 100000)[[1]][1]
+  }
+  else{
+    deaths_CO_7day_100k[i] <- (avg7_deaths[i] / CO_pop_year[2,3] * 100000)[[1]][1]
+  }
+}
+## print(deaths_C0_7day_100k)
+## add to data set
+CO_7day_100k <- CO_by7
+CO_7day_100k$cases_7day_100k <- cases_CO_7day_100k
+CO_7day_100k$deaths_7day_100k <- deaths_CO_7day_100k
+## print main results
+as_tibble(CO_7day_100k)%>%
+  select(date, cases_7day_100k, deaths_7day_100k)
+
+###############################################################
+###############################################################
+## MARYLAND
+
+MD_counties_diff <- counties_combined %>%
+  filter(state == "Maryland") %>%
+  filter(date >= as.Date("2020-03-15")) %>%
+  filter(date <= as.Date("2021-12-31")) %>%
+  group_by(date) %>%
+  summarise(
+    deaths_MD = sum(deaths),
+    cases_MD = sum(cases)
+  )
+
+new_MD_deaths <- vector("double", length(MD_counties_diff$deaths_MD))
+
+for(i in 1:length(MD_counties_diff$deaths_MD)){
+ if(i <= 1){ 
+    new_MD_deaths <- (MD_counties_diff$deaths_MD[i])
+ }
+  else{
+    new_MD_deaths <- append(new_MD_deaths,
+            MD_counties_diff$deaths_MD[i] - MD_counties_diff$deaths_MD[i - 1])
+  }
+}
+
+MD_counties_diff$new_deaths_MD<- new_MD_deaths
+
+new_MD_cases <- vector("double", length(MD_counties_diff$cases_MD))
+for(i in 1:length(MD_counties_diff$cases_MD)){
+ if(i <= 1){ 
+    new_MD_cases <- (MD_counties_diff$cases_MD[i])
+ }
+  else{
+    new_MD_cases <- append(new_MD_cases,
+            MD_counties_diff$cases_MD[i] - MD_counties_diff$cases_MD[i - 1])
+  }
+}
+
+MD_counties_diff$new_cases_MD <- new_MD_cases
+## use the new cases and deaths to find the 7day avg. 
+
+MD_by7 <- 
+  transform(MD_counties_diff,
+    avg7_deaths = rollmeanr(new_cases_MD, 7, fill = NA)
+  )
+
+MD_by7 <- 
+  transform(MD_by7, 
+            avg7_cases = rollmeanr(new_deaths_MD, 7, fill = NA))
+
+## use the 7-day avg. to calc. the value per 100k people
+## which will depend on the year 
+MD_pop_year <- state_pop_est %>%
+  filter(state == "Maryland") 
+
+cases_MD_7day_100k <- vector("double", length(MD_by7$avg7_cases))
+avg7_cases <- MD_by7$avg7_cases
+for( i in 1: length(MD_by7$avg7_cases)){
+  if( i <= last_day2020[1,1]){
+    cases_MD_7day_100k[i] <- (avg7_cases[i] / (MD_pop_year[1,3]) * 100000)[[1]][1]
+  }
+  else{
+    cases_MD_7day_100k[i] <- (avg7_cases[i] / (MD_pop_year[2,3]) * 100000)[[1]][1]
+  }
+}
+## print(cases_MD_7day_100k)
+## 7b) repeat for deaths
+deaths_MD_7day_100k <- vector("double", length(MD_by7$avg7_deaths))
+avg7_deaths <-MD_by7$avg7_deaths
+
+for(i in 1: length(MD_by7$avg7_deaths)){
+  if(i <= last_day2020[1,1]){
+    deaths_MD_7day_100k[i] <- (avg7_deaths[i] / (MD_pop_year[1,3]) * 100000)[[1]][1]
+  }
+  else{
+    deaths_MD_7day_100k[i] <- (avg7_deaths[i] / MD_pop_year[2,3] * 100000)[[1]][1]
+  }
+}
+## print(deaths_MD_7day_100k)
+## add to data set
+MD_7day_100k <- MD_by7
+MD_7day_100k$cases_7day_100k <- cases_MD_7day_100k
+MD_7day_100k$deaths_7day_100k <- deaths_MD_7day_100k
+## print main results
+as_tibble(MD_7day_100k) %>%
+  select(date, cases_7day_100k, deaths_7day_100k)
+
+###############################################################
+###############################################################
+## NEW YORK
+NY_counties_diff <- counties_combined %>%
+  filter(state == "New York") %>%
+  filter(date >= as.Date("2020-03-15")) %>%
+  filter(date <= as.Date("2021-12-31")) %>%
+  group_by(date) %>%
+  summarise(
+    deaths_NY = sum(deaths),
+    cases_NY = sum(cases)
+  )
+
+new_NY_deaths <- vector("double", length(NY_counties_diff$deaths_NY))
+
+for(i in 1:length(NY_counties_diff$deaths_NY)){
+ if(i <= 1){ 
+    new_NY_deaths <- (NY_counties_diff$deaths_NY[i])
+ }
+  else{
+    new_NY_deaths <- append(new_NY_deaths,
+            NY_counties_diff$deaths_NY[i] - NY_counties_diff$deaths_NY[i - 1])
+  }
+}
+
+NY_counties_diff$new_deaths_NY<- new_NY_deaths
+
+new_NY_cases <- vector("double", length(NY_counties_diff$cases_NY))
+for(i in 1:length(NY_counties_diff$cases_NY)){
+ if(i <= 1){ 
+    new_NY_cases <- (NY_counties_diff$cases_NY[i])
+ }
+  else{
+    new_NY_cases <- append(new_NY_cases,
+            NY_counties_diff$cases_NY[i] - NY_counties_diff$cases_NY[i - 1])
+  }
+}
+
+NY_counties_diff$new_cases_NY <- new_NY_cases
+## use the new cases and deaths to find the 7day avg. 
+
+NY_by7 <- 
+  transform(NY_counties_diff,
+    avg7_deaths = rollmeanr(new_cases_NY, 7, fill = NA)
+  )
+
+NY_by7 <- 
+  transform(NY_by7, 
+            avg7_cases = rollmeanr(new_deaths_NY, 7, fill = NA))
+## use the 7-day avg. to calc. the value per 100k people
+## which will depend on the year 
+NY_pop_year <- state_pop_est %>%
+  filter(state == "New York") 
+
+cases_NY_7day_100k <- vector("double", length(NY_by7$avg7_cases))
+avg7_cases <- NY_by7$avg7_cases
+for( i in 1: length(NY_by7$avg7_cases)){
+  if( i <= last_day2020[1,1]){
+    cases_NY_7day_100k[i] <- (avg7_cases[i] / (NY_pop_year[1,3]) * 100000)[[1]][1]
+  }
+  else{
+    cases_NY_7day_100k[i] <- (avg7_cases[i] / (NY_pop_year[2,3]) * 100000)[[1]][1]
+  }
+}
+## print(cases_NY_7day_100k)
+## 7b) repeat for deaths
+deaths_NY_7day_100k <- vector("double", length(NY_by7$avg7_deaths))
+avg7_deaths <-NY_by7$avg7_deaths
+
+for(i in 1: length(NY_by7$avg7_deaths)){
+  if(i <= last_day2020[1,1]){
+    deaths_NY_7day_100k[i] <- (avg7_deaths[i] / (NY_pop_year[1,3]) * 100000)[[1]][1]
+  }
+  else{
+    deaths_NY_7day_100k[i] <- (avg7_deaths[i] / NY_pop_year[2,3] * 100000)[[1]][1]
+  }
+}
+## print(deaths_CA_7day_100k)
+## add to data set
+NY_7day_100k <- NY_by7
+NY_7day_100k$cases_7day_100k <- cases_NY_7day_100k
+NY_7day_100k$deaths_7day_100k <- deaths_NY_7day_100k
+## print main results
+as_tibble(NY_7day_100k)%>%
+  select(date, cases_7day_100k, deaths_7day_100k)
+
+```
+-- Communicate your methodology, results, and interpretation here -- 
+We really just used the same methods for the calculations for California
+
+
+##### Question 7
+Create a visualization comparing the seven-day averages for new deaths and 
+cases per 100,000 people for the four states you selected. 
+
+```{r, part2_question7, echo = TRUE, include=TRUE}
+## Create a visualization comparing the seven-day averages for new deaths and 
+## cases per 100,000 people for the four states you selected. 
+
+## CO #########################################
+## create a plot data set with only the two variables we need
+## change to two columns to use facet_wrap easily 
+CO_plot <- CO_7day_100k %>%
+  select(date, cases_7day_100k, deaths_7day_100k) %>%
+  pivot_longer(c('cases_7day_100k','deaths_7day_100k'),
+               names_to = 'type',
+               values_to = 'number_reported'
+  )
+
+
+variable_names <- list(
+  "cases_7day_100k" = "Cases (per 100,000 people)" ,
+  "deaths_7day_100k" = "Deaths (per 100,000 people)"
+)
+
+variable_labeller <- function(variable, value){
+  return(variable_names[value])
+}
+
+CO_plot2 <- CO_plot %>% ggplot(
+  aes(x = date,
+      y = number_reported,
+      fill = type)) +
+         geom_bar(stat = 'identity',
+                  size = .25, na.rm = TRUE)+
+    facet_wrap(~ type,
+             nrow =  2, 
+             scales = "free",
+             labeller = variable_labeller) +
+  labs(x = "Date", 
+       y = "7-day avg. Deaths       7-day avg. Cases", 
+       fill = "Type Reported:") +
+  theme(title = element_text(face = "bold",
+                             size = 7),
+        axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold")) +
+  ggplot2::labs(title =
+              "        Colorado COVID-19 Deaths & Cases:
+              7-day avg. per 100,000 people") + 
+  scale_fill_discrete(labels = c("Cases", "Deaths")) +
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months",
+               limits = as.Date(c('2020-03-15','2021-12-31')))
+
+## MD #########################################
+MD_plot <- MD_7day_100k %>%
+  select(date, cases_7day_100k, deaths_7day_100k) %>%
+  pivot_longer(c('cases_7day_100k','deaths_7day_100k'),
+               names_to = 'type',
+               values_to = 'number_reported'
+  )
+MD_plot2 <- MD_plot %>% ggplot(
+  aes(x = date,
+      y = number_reported,
+      fill = type)) +
+         geom_bar(stat = 'identity',
+                  size = .25, na.rm = TRUE)+
+    facet_wrap(~ type,
+             nrow =  2, 
+             scales = "free",
+             labeller = variable_labeller) +
+  labs(x = "Date", 
+       y = "7-day avg. Deaths       7-day avg. Cases", 
+       fill = "Type Reported:") +
+  theme(title = element_text(face = "bold", 
+                             size = 6),
+        axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold")) +
+  ggplot2::labs(title =
+              "        Maryland COVID-19 Deaths & Cases:
+              7-day avg. per 100,000 people") + 
+  scale_fill_discrete(labels = c("Cases", "Deaths")) +
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months",
+               limits = as.Date(c('2020-03-15','2021-12-31')))
+
+
+## NY
+NY_plot <- NY_7day_100k %>%
+  select(date, cases_7day_100k, deaths_7day_100k) %>%
+  pivot_longer(c('cases_7day_100k','deaths_7day_100k'),
+               names_to = 'type',
+               values_to = 'number_reported')
+
+NY_plot2 <- NY_plot %>% ggplot(
+  aes(x = date,
+      y = number_reported,
+      fill = type)) +
+         geom_bar(stat = 'identity',
+                  size = .25, na.rm = TRUE)+
+    facet_wrap(~ type,
+             nrow =  2, 
+             scales = "free",
+             labeller = variable_labeller) +
+  labs(x = "Date", 
+       y = "7-day avg. Deaths       7-day avg. Cases", 
+       fill = "Type Reported:") +
+  theme(title = element_text(face = "bold",
+                             size = 6),
+        axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold")) +
+  ggplot2::labs(title =
+              "        New York COVID-19 Deaths & Cases:
+              7-day avg. per 100,000 people") + 
+  scale_fill_discrete(labels = c("Cases", "Deaths")) +
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months",
+               limits = as.Date(c('2020-03-15','2021-12-31')))
+
+plot_grid(CA_plot_2, CO_plot2)
+plot_grid(MD_plot2, NY_plot2)
+
+```
+
+-- Communicate your methodology, results, and interpretation here -- 
+We just repeated the same process for California. One thing 
+I did notice about the NY data set is that the COVID data set does not 
+include the Boroughs of New York like Kings, Bronx, etc. so this data
+may be under representing the total COVID cases and deaths because 
+even when I summed up the population for NY based on the counties present in 
+the data set the total population came up significantly lower than the 
+expected 19 million. The facet_wrap, grid_arrange(), and even plot_grid 
+could not handle all 4 plots at once. When I tried to use them to compare
+side by side the value and meanings were lost. Overall each state does 
+seem to show a strong two spike correlation around the COVID variants times, but 
+California's is closest to the US total, the Colorado results per 100k 
+shows a higher rate than for deaths and cases overall than the other states. 
+Maryland has the most unusual results that don't follow as much of a 
+pattern that we would expect, the cases spike earlier than expected for 
+both spikes. Then New York overall shows much lower rates for both cases and 
+deaths per 100k people. I think if we had all the data including the Boroughs
+the results would be different because there was likely more COVID reports
+and there populations of each is very high. 
+
+
+
+

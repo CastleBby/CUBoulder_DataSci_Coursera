@@ -1,0 +1,360 @@
+---
+title: "CourseraCapstone_pt3"
+author: "Castelan Moreno, Emily"
+date: "2022-11-25"
+output: html_document
+---
+#### Part 3 - Global Comparison
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(tidyverse)
+library(lubridate)
+library(usmap)
+library(ggplot2)
+library(forcats)
+library(zoo)
+library(patchwork)
+library(stringr)
+library(ggrepel)
+library(usmap)
+library(cowplot)
+library(gridExtra)
+library(anytime)
+```
+## THE DATASETS
+```{r, import-nyt-data, include=FALSE}
+# Import New York Times COVID-19 data
+# Import Population Estimates from US Census Bureau 
+
+us_counties_2020 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2020.csv")
+us_counties_2021 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2021.csv")
+us_counties_2022 <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2022.csv")
+
+us_population_estimates <- read_csv("fips_population_estimates.csv")
+```
+
+```{r import-csse}
+# Import global COVID-19 statistics aggregated by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University.
+# Import global population estimates from the World Bank.
+
+csse_global_deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv")
+csse_global_cases <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv")
+csse_us_deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv")
+csse_us_cases <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv")
+
+globabl_population_estimates <- read_csv("global_population_estimates.csv")
+```
+
+
+##### Question 1
+
+Using the state you selected in Part 2 Question 2 compare the daily 
+number of cases and deaths reported from the CSSE and NY Times. Create
+a Visualization to compare and contrast. 
+
+```{r, part3_question1}
+## Load in CA state info from part 2
+counties_combined <- rbind(us_counties_2020, us_counties_2021, us_counties_2022)
+
+california_only <- counties_combined %>%
+  filter(state == "California") 
+
+## the cases and deaths total for CA
+
+california_Times <- california_only %>%
+  group_by(date) %>%
+  summarise(
+    deaths_CA = sum(deaths),
+    cases_CA = sum(cases)
+  )
+
+as_tibble(california_Times)
+
+## 1) Now find the CA data reported by the CSSE cases and deaths 
+## try to rbind them together but they have different variables numbers 
+## also, they have the cases spread across variables instead of a date and cases
+## columns so use pivot_longer() first to tidy then combine the data sets
+
+csse_cases_tidy <- csse_us_cases %>%
+  pivot_longer(
+    cols = 12:1049,
+    names_to = "date",
+    values_to = "cases"
+  )
+
+as_tibble(csse_cases_tidy)
+
+csse_deaths_tidy <- csse_us_deaths %>%
+  pivot_longer(
+    cols = 12:1049,
+    names_to = "date",
+    values_to = "deaths"
+  ) 
+csse_deaths_tidy <- csse_deaths_tidy[-c(12)]
+
+as_tibble(csse_deaths_tidy)
+
+## 2) now combine the two using a left join 
+csse_combined <- right_join(
+  csse_cases_tidy,
+  csse_deaths_tidy,
+  by = c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2", "Province_State", 
+         "Country_Region", "Lat", "Long_", "Combined_Key", "date")
+)
+
+## 3) the date is not actually a date class, which means it won't work with 
+## functions that we need, use as.date() and specify the format 
+
+csse_combined$date <- as.Date(csse_combined$date, "%m/%d/%y")
+
+## 4) now filter for California info, the other data set starts on 2020-01-25
+csse_CA <- csse_combined %>%
+  filter(Province_State == "California") %>%
+  group_by(date) %>%
+  summarise(
+    cases = sum(cases),
+    deaths = sum(deaths)
+  ) %>%
+  filter(date >= "2020-01-25") %>%
+  arrange(date) %>%
+  rename(
+    csse_cases = 2,
+    csse_deaths = 3
+  )
+
+## 5) now create a visualization 
+## start with CA dataset from NY Times 
+
+CA_plot_data_Times <- california_Times %>%
+  pivot_longer(
+    cols = 2:3,
+    names_to = "type",
+    values_to = "number_reported"
+  ) %>%
+  filter(
+    date != "2022-11-24"
+  )
+
+CA_plot_data_CSSE <- csse_CA %>%
+  pivot_longer(
+    cols = 2:3, 
+    names_to = "type",
+    values_to = "number_reported"
+  ) 
+
+## 6) variables to label the plots for NY TIMES
+
+variable_names <- list(
+  "cases_CA" = "Total Cases" ,
+  "deaths_CA" = "Total Deaths"
+)
+
+variable_labeller <- function(variable, value){
+  return(variable_names[value])
+}
+
+## 6b) variables to label the plots for CSSE
+variable_names2 <- list(
+  "csse_cases" = "Total Cases" ,
+  "csse_deaths" = "Total Deaths"
+)
+
+variable_labeller2 <- function(variable, value){
+  return(variable_names2[value])}
+  
+## 7) PLOT FOR NY TIMES DATA 
+CA_plot_Times <- CA_plot_data_Times %>% ggplot(
+  aes(x = date,
+      y = number_reported,
+      fill = type)) +
+         geom_bar(stat = 'identity',
+                  size = .25, na.rm = TRUE)+
+ facet_wrap(~ type,
+             nrow =  2, 
+             scales = "free",
+             labeller = variable_labeller) + 
+  labs(x = "Date", 
+       y = "Total Deaths NY Times        Total Cases CSSE", 
+       fill = "Type Reported:") +
+  theme(title = element_text(face = "bold",
+                             size = 10),
+        axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        legend.position = "none") +
+  ggplot2::labs(title =
+              "    California COVID-19, via NY Times") + 
+  scale_fill_discrete(labels = c("Cases", "Deaths")) +
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months",
+               limits = as.Date(c('2020-03-15','2022-10-15')))
+
+## 8) PLOT FOR CSSE DATA 
+CA_plot_CSSE <- CA_plot_data_CSSE %>% ggplot(
+  aes(x = date,
+      y = number_reported,
+      fill = type)) +
+         geom_bar(stat = 'identity',
+                  size = .25, na.rm = TRUE)+
+ facet_wrap(~ type,
+             nrow =  2, 
+             scales = "free",
+             labeller = variable_labeller2) + 
+  labs(x = "Date", 
+       y = "Total Deaths CSSE          Total Cases CSSE", 
+       fill = "Type Reported:") +
+  theme(title = element_text(face = "bold",
+                             size = 10),
+        axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        legend.position = "none") +
+  ggplot2::labs(title =
+              "    California COVID-19, via CSSE") + 
+  scale_fill_discrete(labels = c("Cases", "Deaths")) +
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months",
+               limits = as.Date(c('2020-03-15','2022-10-15')))
+## 9_ plot them side by side for comparison 
+plot_grid(CA_plot_CSSE, CA_plot_Times)
+
+```
+
+
+-- Communicate your methodology, results, and interpretation here -- 
+In terms of tidying the CSSE data, the most important things were 
+changing the date columns into a single date column and values for the 
+corresponding date into a single column. Then the date column was actually 
+a character class type so using as.Date() and specifying the format 
+fixed that. Initially I did not notice it and I got all the way to the plotting
+when I realized the date include "Population" and could not use scale_x_date(). 
+Overall the two plots are near identical, even when I set the y-axis to a 
+free scale, the two plots use the same scale automatically. I think the shapes 
+are overall the same. I deleted the legend for each in order to make more room 
+for the graphs to be more detailed. 
+Perhaps my labels are a little repetitive but I think 
+it is better to be clear and over label than to have someone misinterpret 
+the plots. A more precise analysis of the two data sets would set the two 
+equal to one another and graph the points where there is a difference on the
+date and how much of a difference there is. 
+##### Question 2 
+
+Now that you have verified the data reported from the CSSE and NY Times are
+similar, combine the global and US CSSE data sets and identify the top 10 
+countries in terms of deaths and cases per 100,000 people between March 15, 
+2020, and December 31, 2021.
+
+```{r p3q2-response}
+
+# First, combine and tidy the CSSE death and cases data sets. You may wish to
+# keep the two sets separate.
+# Then, tidy the global population estimates. While tidying your data, remember 
+# to include columns that you will be able to use when joining the COVID-19 data. 
+# You will notice that the population estimates data does not include every 
+# country reported in the CSSE data. When calculating statistics per 100,000 
+# people, you will need to filter the CSSE data to only include countries that 
+# you have population estimates for. 
+
+
+## 1) before combining them, tidy the data sets using pivot_longer() 
+## check that the date is actually a date class, if not change 
+csse_global_cases_tidy <- csse_global_cases %>%
+  pivot_longer(
+    cols = 5:1042,
+    names_to = "date",
+    values_to = "cases"
+  )
+
+csse_global_cases_tidy$date <- as.Date(csse_global_cases_tidy$date,
+                                  "%m/%d/%y")
+  
+csse_global_deaths_tidy <- csse_global_deaths %>%
+  pivot_longer(
+    cols = 5:1042,
+    names_to = "date",
+    values_to = "deaths"
+  )
+
+csse_global_deaths_tidy$date <- as.Date(csse_global_deaths_tidy$date, 
+                                    "%m/%d/%y")
+
+## checkpoint, make sure they are the same size in terms or rows 
+## (csse_global_cases_tidy)
+## as_tibble(csse_global_deaths_tidy)
+
+## 2) now combine the two together 
+
+csse_global_tidy <- right_join(
+  csse_global_cases_tidy,
+  csse_global_deaths_tidy
+)
+
+## 3) we will need the populations of the counties 
+## we need find which counties we have the pop. for that are also in the other 
+## data set 
+countries_COVID <- unique(csse_global_tidy$`Country/Region`)
+
+as_tibble(countries_COVID)
+## this returns 201 countries 
+
+global_countries <- unique(globabl_population_estimates$`Country Name`)
+
+as_tibble(global_countries)
+## this returns 267 countries
+## 3b) find where they are not the same 
+ifelse(global_pop_filtered$`Country Name` == countries_COVID, "yes", "no")
+
+global_pop_filtered <- globabl_population_estimates %>% 
+  filter(
+    `Country Name` != "Africa Eastern and Southern",
+    `Country Name` != "Africa Western and Central",
+    `Country Name` != "American Samoa",
+  )
+##########################
+###########################
+## NEW IDEA 
+
+
+## (global_pop_filtered$`Country Name` == countries_COVID, "yes", "no")
+
+## for(i in length(countries_COVID)){
+  for( i in 1:10){
+  ## print(c("i =", i,  countries_COVID[i]))
+    for(j in 1:10){
+  ## print(global_countries[j])
+      if(global_countries[j] == countries_COVID[i]){
+        print(global_countries[j])
+      }
+    }
+  }
+
+
+
+  
+```
+-- Communicate your methodology, results, and interpretation here -- 
+
+##### Question 3
+
+Construct a visualization plotting the 10 countries in terms of deaths and cases
+per 100,000 people between March 15, 2020, and December 31, 2021. In designing 
+your visualization keep the number of data you will be plotting in mind. You 
+may wish to create two separate visualizations, one for deaths and another for 
+cases. 
+```{r p3q3-response}
+
+
+```
+
+-- Communicate your methodology, results, and interpretation here -- 
+
+##### Question 4
+
+Finally, select four countries from one continent and create visualizations
+for the daily number of confirmed cases per 100,000 and the daily number of 
+deaths per 100,000 people between March 15, 2020, and December 31, 2021.
+```{r p3q4-response}
+
+```
+
+-- Communicate your methodology, results, and interpretation here -- 

@@ -20,6 +20,7 @@ library(usmap)
 library(cowplot)
 library(gridExtra)
 library(anytime)
+library(hrbrthemes)
 ```
 ## THE DATASETS
 ```{r, import-nyt-data, include=FALSE}
@@ -42,7 +43,7 @@ csse_global_cases <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/
 csse_us_deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv")
 csse_us_cases <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv")
 
-globabl_population_estimates <- read_csv("global_population_estimates.csv")
+global_population_estimates <- read_csv("global_population_estimates.csv")
 ```
 
 
@@ -52,7 +53,7 @@ Using the state you selected in Part 2 Question 2 compare the daily
 number of cases and deaths reported from the CSSE and NY Times. Create
 a Visualization to compare and contrast. 
 
-```{r, part3_question1}
+```{r, part3_question1, echo=TRUE}
 ## Load in CA state info from part 2
 counties_combined <- rbind(us_counties_2020, us_counties_2021, us_counties_2022)
 
@@ -166,9 +167,10 @@ variable_labeller2 <- function(variable, value){
 CA_plot_Times <- CA_plot_data_Times %>% ggplot(
   aes(x = date,
       y = number_reported,
-      fill = type)) +
+      fill = type,
+      color = type)) +
          geom_bar(stat = 'identity',
-                  size = .25, na.rm = TRUE)+
+                  size = .2, na.rm = TRUE)+
  facet_wrap(~ type,
              nrow =  2, 
              scales = "free",
@@ -193,9 +195,10 @@ CA_plot_Times <- CA_plot_data_Times %>% ggplot(
 CA_plot_CSSE <- CA_plot_data_CSSE %>% ggplot(
   aes(x = date,
       y = number_reported,
-      fill = type)) +
+      fill = type,
+      color = type)) +
          geom_bar(stat = 'identity',
-                  size = .25, na.rm = TRUE)+
+                  size = .2, na.rm = TRUE)+
  facet_wrap(~ type,
              nrow =  2, 
              scales = "free",
@@ -244,7 +247,7 @@ similar, combine the global and US CSSE data sets and identify the top 10
 countries in terms of deaths and cases per 100,000 people between March 15, 
 2020, and December 31, 2021.
 
-```{r p3q2-response}
+```{r p3q2-response, echo=TRUE}
 
 # First, combine and tidy the CSSE death and cases data sets. You may wish to
 # keep the two sets separate.
@@ -256,7 +259,7 @@ countries in terms of deaths and cases per 100,000 people between March 15,
 # you have population estimates for. 
 
 
-## 1) before combining them, tidy the data sets using pivot_longer() 
+## 1) before combining them, tidy the data set using pivot_longer() 
 ## check that the date is actually a date class, if not change 
 csse_global_cases_tidy <- csse_global_cases %>%
   pivot_longer(
@@ -279,60 +282,164 @@ csse_global_deaths_tidy$date <- as.Date(csse_global_deaths_tidy$date,
                                     "%m/%d/%y")
 
 ## checkpoint, make sure they are the same size in terms or rows 
-## (csse_global_cases_tidy)
+## as_tibble(csse_global_cases_tidy)
 ## as_tibble(csse_global_deaths_tidy)
 
-## 2) now combine the two together 
+## 2) now combine the two together in new data set
 
-csse_global_tidy <- right_join(
-  csse_global_cases_tidy,
-  csse_global_deaths_tidy
-)
+csse_global_tidy_1 <- csse_global_cases_tidy
+csse_global_tidy_1$deaths <- csse_global_deaths_tidy$deaths
+
 
 ## 3) we will need the populations of the counties 
 ## we need find which counties we have the pop. for that are also in the other 
 ## data set 
-countries_COVID <- unique(csse_global_tidy$`Country/Region`)
+countries_COVID <- unique(csse_global_tidy_1$`Country/Region`)
 
-as_tibble(countries_COVID)
+## as_tibble(countries_COVID)
 ## this returns 201 countries 
 
-global_countries <- unique(globabl_population_estimates$`Country Name`)
+global_countries <- unique(global_population_estimates$`Country Name`)
 
-as_tibble(global_countries)
+## as_tibble(global_countries)
 ## this returns 267 countries
-## 3b) find where they are not the same 
-ifelse(global_pop_filtered$`Country Name` == countries_COVID, "yes", "no")
+## 3b) find where they are the same using a nested for loop 
 
-global_pop_filtered <- globabl_population_estimates %>% 
-  filter(
-    `Country Name` != "Africa Eastern and Southern",
-    `Country Name` != "Africa Western and Central",
-    `Country Name` != "American Samoa",
-  )
-##########################
-###########################
-## NEW IDEA 
+countries_matched <- vector("character", length(countries_COVID))
 
-
-## (global_pop_filtered$`Country Name` == countries_COVID, "yes", "no")
-
-## for(i in length(countries_COVID)){
-  for( i in 1:10){
+  for( i in 1:267){
   ## print(c("i =", i,  countries_COVID[i]))
-    for(j in 1:10){
+    for(j in 1:267){
   ## print(global_countries[j])
-      if(global_countries[j] == countries_COVID[i]){
-        print(global_countries[j])
+      if(isTRUE(global_countries[j] == countries_COVID[i]) == TRUE){
+        countries_matched[i] <- global_countries[j]
       }
-    }
+  }}
+## 5) check the length of our saved vector, it is 201! 
+## as_tibble(countries_matched)
+
+## 6) select the 2021 year for population data because that is what we'll use
+## rename variables
+global_population_estimates2 <- global_population_estimates %>%
+  select(`Country Name`, '2021 [YR2021]')%>%
+  rename(country = `Country Name`,
+         year_2021 = '2021 [YR2021]')
+
+## 7) make our countries matched vector into a list to compare 
+## check the size after 
+countries_matched2 <- structure(list(countries_matched))
+
+globe_est <- global_population_estimates2[global_population_estimates2$country
+                             %in% countries_matched2[[1]],]
+
+## globe_est is now 171x2
+
+## 7b) the globe_est needs some cleaning, filter extra country and change to 
+## numeric type for the pop. so we can calculate with it
+globe_est2 <- globe_est %>%
+  filter(country != 'Eritrea') 
+
+  globe_est_pop_2021_as_num <- vector("double",length(globe_est2$year_2021))
+  for( i in 1:length(globe_est2$year_2021)) {
+    globe_est_pop_2021_as_num[i] <- as.numeric(globe_est2$year_2021[i])
   }
+  #print(globe_est_pop_2021_as_num)
+  #as.numeric(unlist(globe_est$pop_2021))
+
+  ## check that it matches 
+  ## globe_est2 
+  ## globe_est_pop_2021_as_num   
+## 7) place the new column into the data set and remove the character column
+globe_est2$pop_numeric <- globe_est_pop_2021_as_num 
+globe_est2 <- globe_est2 %>%
+  select(country, pop_numeric)
 
 
+## 8) set date limit to COVID data set and select country, date, cases & deaths 
+## 8b) note that some countries are spread across multiple rows use group_by()
+## and sum up the cases and deaths by country
+csse_global_tidy <- csse_global_tidy_1 %>%
+  filter(date == "2021-12-31") %>%
+  select(`Province/State`, `Country/Region`, date, cases, deaths) %>%
+## but there are multiple entries for countries like australia 
+  group_by(`Country/Region`) %>%
+  summarise(
+    total_cases = sum(cases),
+    total_deaths = sum(deaths)
+  )
 
-  
+## 9) apply the same countries_matches list to the COVID data set to 
+## have the same countries for out per 100k calculation 
+csse_global_tidy_test <- csse_global_tidy[csse_global_tidy$`Country/Region`
+                                          %in% countries_matched2[[1]],]
+
+## 9b) we check the sizes of each data set and verify they are the same 
+## then put them together
+## remove the Eritrea country from the csse_global 
+csse_global_tidy_test <- csse_global_tidy_test %>%
+  rename(country = `Country/Region`)
+csse_global_tidy_test <- csse_global_tidy_test %>%
+  filter(country != "Eritrea")
+
+## JOIN 
+global_covid_pop <- full_join(
+  csse_global_tidy_test,
+  globe_est2,
+  by = "country"
+)
+## test run 
+as_tibble(global_covid_pop)
+
+## 10) use mutate() on our new data set to  
+## calculate the cases and deaths per 100k and arrange in descending order
+
+global_covid_100k <- global_covid_pop %>%
+  mutate(cases_100k = 
+           total_cases / pop_numeric *100000) 
+global_covid_100k <- global_covid_100k %>%
+  mutate(deaths_100k = 
+           total_deaths / pop_numeric * 100000)
+
+## 11) arrange the countries in descending order by cases and deaths 
+## print the top 10 
+top10_per100k <- global_covid_100k %>%
+  arrange(desc(deaths_100k), cases_100k) %>%
+  head(n = 10)
+as_tibble(top10_per100k)
+## 12) print out the results 
+writeLines("top 10 countries with highest COVID-19 deaths and cases per 
+           100,000 people from March 15 2020 to December 31 2021")
+print(top10_per100k$country)
 ```
 -- Communicate your methodology, results, and interpretation here -- 
+First, the CSSE data set was very different to work with. I don't understand why
+someone would save the date as a character class. So we fixed that and fixed 
+how the cases and deaths were spread across the columns using pivot_longer(). 
+Then the global population data set was weird too, like the population 
+estimate itself was a character class, when it was numbers obviously and 
+instead of using NA or 0 for unknown population estimate it had ".."
+so I couldn't convert is using as_numeric() easily. Anyways, I used a for loop 
+to convert it instead because it got the job done even though there is probably 
+a shortcut function. Then we needed to find where the two data sets had the 
+same countries. We did this using a nested for loop because we needed 
+to find if there were any matches regardless of position, so for each 
+iteration of the COVID data set, we checked all of the population data set. 
+This is probably taxing on the computer, but it was the tried and true method. 
+Next, despite finding where there were matches, we needed it as a list 
+character in order to use it in an indexing format. We kept only the 
+values for countries found in both data sets, and yet Eritrea snuck in there
+without an acutal pop. estimate so we filtered it out individually. Finally
+we combined the data sets because they finally matched in observations 
+and we calculated, saving the new variable with mutate(). The results of the 
+top 10 countries seem to match my results through Google searching. Although
+these countries are not highly populated nor did they have the most number
+of total COVID deaths and cases, they have higher rates per capital due to 
+lack of medical resources. The John Hopkins University website has a COVID
+data page where the deaths per 100k for Peru is 659, which is close to our
+results. The page similarly has Bulgaria, Hungary, and our other countries
+we found as the top 10 listed within reasonable proximity to ours. Noting
+that there's may by higher because the results are up to the current date. 
+
 
 ##### Question 3
 
@@ -341,20 +448,372 @@ per 100,000 people between March 15, 2020, and December 31, 2021. In designing
 your visualization keep the number of data you will be plotting in mind. You 
 may wish to create two separate visualizations, one for deaths and another for 
 cases. 
-```{r p3q3-response}
+```{r p3q3-response, echo=TRUE}
+## 1) Gather the COVID 19 data for only the top 10 countries 
+## 1b) based on our previous tidying 
+csse_10_tidy <- csse_global_tidy_1 %>% rename(
+  country = "Country/Region"
+)
+
+## 1c) save the 10 countries in a vector 
+top_10_per100k_list <- top10_per100k$country
+## 2d) convert that vector into a list class
+top_10_per100k_list2 <- structure(list(top_10_per100k_list))
+## 2e) use the list class 10 countries to filter our COVID data
+csse_10_tidy2 <- csse_10_tidy[csse_10_tidy$country
+                              %in% top_10_per100k_list2[[1]],]
+## 3) set the date lower and upper bounds
+csse_10_tidy2 <- csse_10_tidy2 %>%
+  filter(date >= "2020-03-15") %>%
+  filter(date <= "2021-12-31")
+  
+## 4) set up the population data set to work with our top 10 countries 
+global_pop_again <- global_population_estimates
+## 4c) rename the variable because they suck 
+top_10_pop <- global_pop_again %>%
+  rename(
+    country = `Country Name`, 
+    pop_est_2020 = "2020 [YR2020]",
+    pop_est_2021 = "2021 [YR2021]"
+  )
+## 4d) select only the variables we will use 
+top_10_pop <- top_10_pop %>%
+  select(country, pop_est_2020, pop_est_2021)
+
+## 4e) filter for the countries that are the top 10 using our previous list 
+top_10_pop_tidy <- top_10_pop[top_10_pop$country
+                              %in% top_10_per100k_list2[[1]],]
+
+## 5) Now, to work with the populations we need to change the class to numeric
+## we'll use the same for loop method as before, once for the
+## 5b) first for the 2020 pop. 
+top_10_pop_2020_as_num <- 
+    vector("double", length(top_10_pop_tidy$pop_est_2020))
+  for(i in 1:length(top_10_pop_tidy$pop_est_2020)){
+    top_10_pop_2020_as_num[i] <- as.numeric(top_10_pop_tidy$pop_est_2020[i])
+  }
+## 5c) the for the 2021 pop. 
+top_10_pop_2021_as_num <- 
+  vector("double", length(top_10_pop_tidy$pop_est_2021))
+for(i in 1:length(top_10_pop_tidy$pop_est_2021)){
+  top_10_pop_2021_as_num[i] <- as.numeric(top_10_pop_tidy$pop_est_2021[i])
+}
+
+## 6) add the two as columns into the data set for populations and 
+## select out the character versions 
+
+top_10_pop_tidy$num_2020 <- top_10_pop_2020_as_num
+top_10_pop_tidy$num_2021 <- top_10_pop_2021_as_num
+
+top_10_pop_tidy <- top_10_pop_tidy %>%
+  select(country, num_2020, num_2021)
+
+## 7) Combine the COVID tidy set with the pop. tidy set
+## first check the sets 
+  ## top_10_pop_tidy
+  ## csse_10_tidy2
+  ## verify that new data set is correct 
+  ## ten_by_100k_inter
+
+ten_by_100k_inter<- full_join(
+  csse_10_tidy2,
+  top_10_pop_tidy,
+  by = "country"
+) 
+
+ten_by_100k <- ten_by_100k_inter %>%
+  select(
+    country, date, cases, deaths, num_2020, num_2021
+  )
+
+## 8) use a for loop to calc. cases per 100k 
+
+cases_by100k <- vector("double", 6570)
+for (i in 1:6570){
+  if(substr(ten_by_100k$date[i], 1, 4) == "2020"){
+    cases_by100k[i] <- (ten_by_100k$cases[i] / ten_by_100k$num_2020[i]*100000)
+  }
+  else{
+    cases_by100k[i] <- (ten_by_100k$cases[i] / ten_by_100k$num_2021[i]*100000)
+  }
+}
+
+## 9) use another for loop to calculate deaths per 100k
+deaths_by100k <- vector("double", 6570)
+for (i in 1:6570){
+  if(substr(ten_by_100k$date[i], 1, 4) == "2020"){
+    deaths_by100k[i] <- (ten_by_100k$deaths[i] / ten_by_100k$num_2020[i]*100000)
+  }
+  else{
+    deaths_by100k[i] <- (ten_by_100k$deaths[i] / ten_by_100k$num_2021[i]*100000)
+  }
+}
+
+## as_tibble(deaths_by100k)
+## as_tibble(cases_by100k)
+## check point 
+
+## 10) add the two columns 
+ten_by_100k$cases_by100k <- cases_by100k
+ten_by_100k$deaths_by100k <- deaths_by100k
+
+## NOW make it a visualization 
+plot_cases_by100k <- ten_by_100k %>%
+  ggplot(
+  aes(x = date,
+      y = cases_by100k, 
+      color = country))+
+    geom_line(size = .7)+
+  labs(title = "COVID-19 Cases per 100k:",
+       x = "", 
+       y = "Number  Reported",
+       color = "Country:") +
+  theme(title = element_text(face = "bold",
+                             size = 8),
+        axis.text.x = element_text(angle = 15,
+                                   size = 6),
+        axis.text.y = element_text(size = 7),
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        legend.position = "none")+
+  guides(color = guide_legend(override.aes = list(size = 2)))+
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months",
+               limits = as.Date(c('2020-03-15','2021-12-31')))
+  
+plot_deaths_by100k <- ten_by_100k %>%
+  ggplot(
+  aes(x = date,
+      y = deaths_by100k, 
+      color = country)) +
+    geom_line(size = .7)+
+  labs(title = "COVID-19 Deaths per 100k:",
+       x = "", 
+       y = "",
+       color = "Country:") +
+  theme(title = element_text(face = "bold",
+                             size = 8),
+        axis.text.x = element_text(angle = 15, size = 6),
+        axis.text.y = element_text(size = 7),
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        legend.position = "none")+
+  guides(color = guide_legend(override.aes = list(size = 2)),
+         shape = guide_legend(override.aes = list(size = .2)))+
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months",
+               limits = as.Date(c('2020-03-15','2021-12-31')))
+## make the legend individually 
+legend <- get_legend(plot_deaths_by100k +
+                       guides(color = guide_legend(nrow = 2))+
+                       theme(legend.position = "bottom") + 
+                       guides(color = guide_legend(
+                       override.aes = list(size = 5.1)
+                     )))
+                     
+                     
+                     
+plots_both <- plot_grid(
+  plot_cases_by100k,
+  plot_deaths_by100k,
+  align = "vh",
+  hjust = -1,
+  nrow = 1
+)
+
+plot_grid(plots_both, legend, ncol = 1, rel_heights = c(1, .1))
 
 
 ```
 
 -- Communicate your methodology, results, and interpretation here -- 
+This plot like out previous data set shows that Peru has the highest COVID 
+deaths per capita, but unlike the previous data set, highest cases per 
+capita is Montenegro. This plot does a good job showing that the 
+cases and deaths per capita varies, but the colors and lines do overlap causing 
+some confusion potentially, even with jitter to prevent overlap there could 
+be confusion.
 
 ##### Question 4
 
 Finally, select four countries from one continent and create visualizations
 for the daily number of confirmed cases per 100,000 and the daily number of 
 deaths per 100,000 people between March 15, 2020, and December 31, 2021.
-```{r p3q4-response}
+```{r p3q4-response, echo=TRUE}
+## 1) select four countries from 1 continent 
+## let's pick South America: Brazil, Colombia, 
+
+SA_4 <- csse_global_tidy_1 %>% 
+  rename(country = "Country/Region")
+
+## 2) filter for the 4 countries 
+
+countries4 <- c("Colombia","Brazil",
+                "Argentina","Chile")
+
+countries4 <- structure(list(countries4))
+
+SA_4 <- SA_4[SA_4$country
+             %in% countries4[[1]],]
+
+## 3) set the date boundaries 
+SA_4_tidy <- SA_4 %>%
+  filter(date >= "2020-03-15") %>%
+  filter(date <= "2021-12-31") %>%
+  select(country, date, cases, deaths)
+
+## 4) Now set up the population data set 
+SA_4_pop <- global_pop_again %>%
+  rename(
+    country = `Country Name`, 
+    pop_est_2020 = "2020 [YR2020]",
+    pop_est_2021 = "2021 [YR2021]"
+  )
+## 4b) apply 4 countries
+SA_4_pop2 <- SA_4_pop[SA_4_pop$country
+                      %in% countries4[[1]],]
+SA_4_pop2 <- SA_4_pop2 %>%
+  select(country, pop_est_2020, pop_est_2021)
+
+## 5) the pop est are not numbers they are character class, so change it! 
+SA_2020_as_num <- vector("double", length(SA_4_pop2$pop_est_2020))
+  for(i in 1:length(SA_4_pop2$pop_est_2020)){
+    SA_2020_as_num[i] <- as.numeric(SA_4_pop2$pop_est_2020[i])
+  }
+## 5c) the for the 2021 pop. 
+SA_2021_as_num <- vector("double", length(SA_4_pop2$pop_est_2021))
+  for(i in 1:length(SA_4_pop2$pop_est_2021)){
+    SA_2021_as_num[i] <- as.numeric(SA_4_pop2$pop_est_2021[i])
+  }
+
+## add these two back into the data set and get rid of the character columns
+SA_4_pop2$pop_2020_num <- SA_2020_as_num
+SA_4_pop2$pop_2021_num <- SA_2021_as_num
+SA_4_pop2 <- SA_4_pop2 %>%
+  select(country, pop_2020_num, pop_2021_num)
+
+## 5b) combine the two data sets 
+SA_4countries_tidy <- full_join(
+  SA_4_tidy,
+  SA_4_pop2,
+  by = "country"
+)
+#################### GOOD #######################
+
+## 6) calculate the cases and deaths per 100k which will depend on the
+## date to determine the right population estimate
+
+cases_SA_100k <- vector("double", 2628)
+for(i in 1:2628){
+  if(substr(SA_4countries_tidy$date[i], 1, 4) == "2020"){
+    cases_SA_100k[i] <- (SA_4countries_tidy$cases[i] /
+                         SA_4countries_tidy$pop_2020_num[i]
+                         * 100000)
+  }
+  else{
+    cases_SA_100k[i] <- (SA_4countries_tidy$cases[i] / 
+                         SA_4countries_tidy$pop_2021_num[i]
+                         *100000)
+  }
+}
+
+## 6b) put this in as a column, verify the size matches 
+## as_tibble(cases_SA_100k)
+## SA_4countries_tidy
+
+SA_4countries_tidy$cases_by100k <- cases_SA_100k
+
+## 6c) Repeat for deaths
+deaths_SA_100k <- vector("double", 2628)
+for(i in 1:2628){
+  if(substr(SA_4countries_tidy$date[i], 1, 4) == "2020"){
+    deaths_SA_100k[i] <- (SA_4countries_tidy$deaths[i] /
+                         SA_4countries_tidy$pop_2020_num[i]
+                         * 100000)
+  }
+  else{
+    deaths_SA_100k[i] <- (SA_4countries_tidy$deaths[i] / 
+                         SA_4countries_tidy$pop_2021_num[i]
+                         *100000)
+  }
+}
+
+SA_4countries_tidy$deaths_by100k <- deaths_SA_100k
+
+## 7) Print out our final data set which we will use to create a visualization 
+as_tibble(SA_4countries_tidy)
+
+## 8) Time to plot, make two plots then patch together
+plot_SA_cases_by100k <- SA_4countries_tidy %>%
+  ggplot(
+  aes(x = date,
+      y = cases_by100k, 
+      color = country))+
+    geom_line(size = .7,
+              position = position_jitter(w = 0.05, h =0))+
+  labs(title = "COVID-19 Cases per 100k:",
+       x = "Date", 
+       y = "Cases, per 100k",
+       color = "Country:") +
+  theme(title = element_text(face = "bold",
+                             size = 8),
+        axis.text.x = element_text(angle = 25),
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        legend.background = element_rect(fill = "grey",
+                                         size = .5, 
+                                         linetype = "solid",
+                                         color = "darkblue"),
+        legend.text = element_text(color = "black", face = "bold"),
+        legend.key.size = unit(.5, "line"))+
+  guides(color = guide_legend(override.aes = list(size = 2)))+
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months",
+               limits = as.Date(c('2020-03-15','2021-12-31')))
+
+  
+plot_SA_deaths_by100k <- SA_4countries_tidy %>%
+  ggplot(
+  aes(x = date,
+      y = deaths_by100k, 
+      color = country))+
+    geom_line(size = .7,
+              position = position_jitter(w = 0.05, h = 0))+
+  labs(title = "COVID-19 Deaths per 100k:",
+       x = "Date", 
+       y = "Deaths, per 100k",
+       color = "Country:") +
+  theme(title = element_text(face = "bold",
+                             size = 8), 
+        axis.text.x = element_text(angle = 25),
+        axis.title.y = element_text(face = "bold"),
+        axis.title.x = element_text(face = "bold"),
+        legend.background = element_rect(fill = "grey",
+                                         size = .5, 
+                                         linetype = "solid",
+                                         color = "darkblue"),
+        legend.text = element_text(color = "black", face = "bold"),
+        legend.key.size = unit(.5, "line"))+
+  guides(color = guide_legend(override.aes = list(size = 2)))+
+  scale_x_date(date_labels = "%b %Y", 
+               date_breaks = "3 months",
+               limits = as.Date(c('2020-03-15','2021-12-31')))
+
+plot_grid(plot_SA_cases_by100k, plot_SA_deaths_by100k)
+
+plot_SA_cases_by100k + facet_wrap(~country)
+plot_SA_deaths_by100k + facet_wrap(~country)
+
 
 ```
 
 -- Communicate your methodology, results, and interpretation here -- 
+For the most part, we used the same methodology as before. However, 
+when plotting, we tried facet_wrap in order to avoid the overlapping, 
+although it is not as easy to tell exactly how close the rates are related
+to one another for the 4 countries they are pretty similar overall for both 
+cases and deaths. The scales make it very clear that there were much more 
+cases per 100,000 people for all 4 countries. Additionally, the 4 countries 
+show that their cases and deaths rate follows a similar slope and shape, 
+therefore when cases go down, deaths go down which tells us our data is 
+likely correct. 

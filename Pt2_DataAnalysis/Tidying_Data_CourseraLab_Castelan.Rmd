@@ -1,0 +1,253 @@
+---
+title: "Tidying_DataLab_Coursera_Castelan"
+author: "Castelan Moreno, Emily"
+date: "2022-11-03"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+```
+# Please complete all the tasks listed below. After completing the tasks download the .Rmd file and upload in the peer review item for grading.
+
+# Additionally please write text between the code chunks explaining what each code chunk is about.
+
+# Refer the linked online textbook in case of any issues.
+##### Question 1. 
+
+The built in billboard dataset is not tidy. Describe why it is not tidy and then 
+tidy the dataset.
+```{r, question1_response}
+## Billboard is not tidy because the weeks columns are should be observation 
+## values, and the number of weeks does not correspond to a value from the date
+
+## First gather up all the week entries into a row for each week for each song 
+## (where there is an entry)
+billboard 
+##print billboard to compare
+
+billboard_tidy <- billboard %>% 
+  pivot_longer(
+    cols = 'wk1':'wk76',
+    names_to = "week",
+    values_to = "rank",
+    values_drop_na = TRUE
+  )
+
+
+# Then, convert the week variable to a number and figure out the date 
+## corresponding to each week on the chart
+billboard_tidy <- billboard_tidy %>%
+    mutate(
+    week = as.integer(gsub("wk","",week)),
+    date = as.Date(date.entered)+7*(week-1),
+    date.entered = NULL
+  )
+
+billboard_tidy
+## I dropped the date entered since the date entries is the same as the 
+## first week it seems unnecessary to keep both columns... 
+
+# Sort the data by artist, track and week. Here are what your first entries 
+## should be (formatting can be different):
+#>  A tibble: 5,307 x 5
+#   artist  track                   date.entered  week  rank   date
+ #    <chr>   <chr>                   <date>       <int> <dbl>   <date>
+ #  1 2 Pac   Baby Don't Cry (Keep... 2000-02-26       1    87 2000-02-26
+ #  2 2 Pac   Baby Don't Cry (Keep... 2000-02-26       2    82 2000-03-04
+ #  3 2 Pac   Baby Don't Cry (Keep... 2000-02-26       3    72 2000-03-11
+ #  4 2 Pac   Baby Don't Cry (Keep... 2000-02-26       4    77 2000-03-18
+ #  5 2 Pac   Baby Don't Cry (Keep... 2000-02-26       5    87 2000-03-25
+ #  6 2 Pac   Baby Don't Cry (Keep... 2000-02-26       6    94 2000-04-01
+ #  7 2 Pac   Baby Don't Cry (Keep... 2000-02-26       7    99 2000-04-08
+ #  8 2Ge+her The Hardest Part Of ... 2000-09-02       1    91 2000-09-02
+ #  9 2Ge+her The Hardest Part Of ... 2000-09-02       2    87 2000-09-09
+ # 10 2Ge+her The Hardest Part Of ... 2000-09-02       3    92 2000-09-16
+ # … with 5,297 more rows
+```
+
+##### Question 2. 
+
+Tidy the "fish_encounters" dataset of fish spotting by monitoring stations.
+Make the NA into 0 using the option "values_fill = list(seen = 0)"
+
+```{r, question2_response}
+## load the dataset to compare
+fish_encounters
+
+
+fish_tidy <- fish_encounters %>% 
+  pivot_wider(
+    names_from = station,
+    values_from = seen, 
+    values_fill = list(seen = 0)
+  )
+  
+fish_tidy
+## we made it so there is only one row per fish number 
+## and filled in NA's with 0 
+```
+##### Question 3. 
+
+Import the flowers1 dataset. Tidy and pivot the data. Hint: use "read_csv2()" 
+to read in the dataset 
+
+```{r, question3_response}
+## download the file from the URL, 
+## save it in a folder
+## read it in using csv2
+fileUrl <- "https://raw.githubusercontent.com/JaneWall/STAT412_612_online/master/Week%208%20tidyr/Data/flowers1.csv?accessType=DOWNLOAD"
+
+if(!file.exists("Data")){dir.create("Data")}
+
+download.file(fileUrl, destfile ="Data/flowers1.csv")
+(dateDownloaded <-date())
+
+flowers1 <- read_csv2(fileUrl)
+flowers1
+
+## tidy the dataset 
+flowers1_tidy <- flowers1 %>%
+pivot_wider(
+  names_from = Variable,
+  values_from = Value
+)
+flowers1_tidy
+```
+##### Question 4.
+
+Import the flowers2 dataset. Tidy the dataset by turning the one column into 3
+separate columns
+```{r, question4_response}
+## download the dataset 
+## save it in a folder 
+## read it in 
+fileUrl2 <- "https://raw.githubusercontent.com/JaneWall/STAT412_612_online/master/Week%208%20tidyr/Data/flowers2.csv?accessType=DOWNLOAD"
+
+if(!file.exists("Data")){dir.create("Data")}
+
+download.file(fileUrl2, destfile = "Data/flowers2.csv")
+(dateDownloaded <- date())
+
+flowers2 <- read_csv2(fileUrl2)
+
+flowers2
+
+## now tidy the dataset
+## there are two values in the same column we will use separate()
+## because there is a decimal point and a / in the column, we must 
+## specify the separater 
+flowers2_tidy <- flowers2 %>%
+separate('Flowers/Intensity', into = c("Flowers", "Cases"), sep = '/')
+      
+flowers2_tidy
+```
+
+##### Question 5.
+
+In the following dataset, turn the implicit missing values to explicit 
+
+```{r, question5_response}
+output <- tibble(
+      treatment   = c("a", "b", "a", "c", "b"),
+      gender   = factor(c("M", "F", "F", "M", "M"), levels = c("M", "F", "O")),
+      return = c(1.5, 0.75,  0.5,  1.8,  NA)
+    )
+output
+
+## there should be a treatment for each gender: 
+## F-a, F-f, F-c
+## M-a, M-b, M-c, 
+## but instead it is missing values for F-c and M-b
+## let's make the implicit values missing using pivot_wider: 
+
+output %>% 
+  pivot_wider(names_from = treatment, values_from = return)
+
+## there are two NA values now in the cells we said were implicitly missing
+
+## this question is a little unclear as to what "O" is but here is another 
+## possible solution using "O" as a gender option 
+## I assumed because there were no values for "O" that it could be ignored
+## but if we want to return an NA for each "O" then.. 
+
+output_two <- tibble(
+      treatment   = c("a", "b", "a", "c", "b"),
+      gender   = factor(c("M", "F", "F", "M", "M"), levels = c("M", "F", "O")),
+      return = c(1.5, 0.75,  0.5,  1.8,  NA)
+    )
+output_two %>% complete(treatment, gender)
+
+
+```
+#####Question 6.
+
+Import the weather dataset as weather. Use "pivot_longer()" to put the days all
+in one column, then use "pivot_wider" to separate tmax and tmin into separate
+columns. Print the summary of the final resulting dataset 
+```{r, question6_response}
+
+fileUrl <- "https://raw.githubusercontent.com/JaneWall/data_STAT412612/master/weather.csv?accessType=DOWNLOAD"
+
+## downlaod the file 
+
+ if(!file.exists("Data")){dir.create("Data")}
+## create a folder for the file if one does not exist 
+
+download.file(fileUrl, destfile = "Data/weather.csv")
+
+(dateDownloaded <- date())
+## put a date on the download 
+
+weather <- read_csv(fileUrl)
+weather
+## read in as csv because it is comma delimited
+
+## now to tidy the data
+weather_fixed <- weather %>%
+pivot_longer(
+  cols = d1:d31,
+  names_to = "day", 
+  values_to = "temp", 
+  values_drop_na = TRUE)
+## first we see that the variables d1:d31 should be observations not columns 
+##  use pivot_()
+##  specify the columns to be changes into observations 
+##  set the names_to for the new column name 
+##  set the column where we will place the values that were inside d1:d31
+## the column to take variable names from is "element" for names_from
+## the column to take values from is 
+weather_fixed <- weather_fixed %>% 
+  pivot_wider(
+  names_from = element, 
+  values_from = temp)
+
+weather_fixed
+```
+
+###### Question 7. 
+
+Load the built in "anscombe" data frame and use "pivot_longer()" to separate
+all the x and y columns and categorize them into 4 sets
+```{r, question7_response}
+## load in the dataset to compare 
+anscombe <- as_tibble(anscombe)
+
+anscombe_tidy <- anscombe %>% 
+ pivot_longer(cols = everything(),
+             names_to = c(".value", "set"),
+             names_pattern = "(.)(.)")
+
+anscombe_tidy
+
+## first use pivot longer to consolidate the columns 
+## specify the columns to send the values to with names_to 
+## use names_pattern() to specify how column names should be split 
+## note using the ".value" overrides the values_to 
+
+```
+

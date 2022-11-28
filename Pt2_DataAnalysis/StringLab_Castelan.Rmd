@@ -1,0 +1,242 @@
+---
+title: "StringLab_Castelan"
+author: "Castelan Moreno, Emily"
+date: "2022-11-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stringr)
+library(tidyverse)
+library(htmlwidgets)
+
+```
+
+##### Assignment Instructions
+
+Complete all questions below. After completing the assignment, knit your
+document, and download both your .Rmd and knitted output. Upload your files 
+for peer review. 
+
+For each response, include comments detailing your response and what each
+line does. Ensure you test your functions with sufficient test cases to
+identify and correct any potential bugs.
+
+##### Question 1.
+
+Use str_c to put `(` before the area codes followed by `)` and a space followed
+by the phone number. 
+```{r, question1}
+### Answer should be of the form "(703) 5551212" "(863) 1234567" 
+### "(404) 7891234" "(202) 4799747"
+
+area_codes <- c(703, 863, 404, 202)
+phone_nums <- c(5551212, 1234567, 7891234, 4799747)
+
+str_c("(",area_codes, ") ", phone_nums)
+
+## 1) concatenate each 
+## 2) str_c to join the two vector elements
+##    specify and added "( )" around the first vector element
+```
+
+##### Question 2.
+
+Create a function that receives a single word as an input. Use str_length() and
+str_sub() to extract the middle character from the string. What will you do if
+the string has an even number of characters? Test your function on the strings
+“hamburger” and “hotdog”
+
+```{r, question2}
+## test cases
+x <- "hamburger"
+y <- "hotdog" 
+s <- "lo"
+name <- "jesse"
+w <- c("hot, hot, hot")
+
+
+## create function that finds the median point of a single string 
+## ** it will only accept 1 argument 
+median_string <- function(x){
+  if(
+    str_detect(x, ",") == TRUE){warning("only single word argument accepted")}
+  else{
+     Leng <- str_length(x)
+     if(Leng <= 2){str_sub(x, 1, 1)}
+     else{
+     Med <- ceiling(Leng/2)
+    str_sub(x, Med, Med)}
+  }
+}
+## 1) it checks if the argument is a single word 
+## 2) if it is, it will take the length 
+## 3) divide the length by 2 to find median 
+## 4) if even number, takes ceiling (takes smallest integer)
+## 5) if length is equal to or less than 2, returns first letter
+## 6) str_sub() used to remove the start and end of the word to find median chr
+
+## test each sample case
+median_string(x)
+median_string(y)
+median_string(s)
+median_string(w)
+## the last case is designed to spit out an error 
+```
+##### Question 3. 
+
+How would you match the sequence "’\? Note this is a double quote, single quote,
+backslash and question mark. Build it up one piece at a time. 
+Use it to identify that sequence contained in s2 below.
+```{r, question3}
+## I realized after the fact this is not what the question is asking for: 
+s <- " \"'\\? "
+s2 <- str_c("some stuff", s ,"more!")
+
+
+#writeLines(s)
+#writeLines(s2)
+writeLines(s)
+writeLines(s2)
+
+## 1) use \ to escape the "" 
+## 2) use a second \ to differentiate beween the printed \ 
+## 3) use a " to end the function 
+
+## THE CORRECT ANSWER: 
+str_view("\"'\\?", "\"'\\\\.{0,1}", match = TRUE)
+str_view(s2, "\"'\\\\.{0,1}", match = TRUE)
+
+
+```
+##### Question 4. 
+
+Using the words provided in stringr::words, create regular expressions 
+that find all words that:
+```{r, question4}
+# End with "ing" or "ise"
+writeLines("words ending in \"ing\" or \"ise\":\ ")
+## just to clean up the print 
+str_subset(stringr::words, "(ing|ise)$")
+## we want words that: 
+##      end with ing
+##      OR |
+##      end with ise 
+##      we use the $ outside of either case presented
+
+
+# Do not follow the rule "i before e except after c"
+writeLines("words that break rule: \"i before e except after c:\ ")
+str_subset(stringr::words, "ei|cie")
+x <- as_tibble(str_subset(stringr::words, "ei|cie"))
+count(x)
+## this means finds words with: 
+##        words with e before i 
+##     OR words with c-i-e
+## count the number of words using count
+## there are 6 words that do not follow the rule
+
+
+# Begin with at least two vowels and end with at least two consonants
+writeLines("words that: begin with 2 vowels and end with 2 consonants: ")
+str_subset(stringr::words, "^[aeiou]{2}.*[^aeiou]{2}$")
+## we want words that: 
+##      start^ with [aeiou] at least {2} 
+##      and .* 
+##      end with NOT[^aeiou]$ ($ is the end specifier), at least {2}
+##        NOTE: we use {2} before the $ otherwise it returns words like "out"
+
+
+# Contain a repeated pair of letters (e.g. "church" contains "ch" twice)
+writeLines("words contain a repeat pair of letters: ")
+str_subset(stringr::words, "([A-Za-z][A-Za-z]).*\\1")
+## we want words that: 
+##      have two letters which are A-Z and a-z 
+##          +using case sensitive 
+##      and .* 
+##      match the pattern, using \\1 backreference, 
+##      aka repeats the first pair 
+
+
+# Contain one letter other than e that is repeated in at least three places 
+# (e.g. “appropriate” contains three “p”s.)
+writeLines("words that contain a letter repeated 3x anywhere, not e:")
+str_subset(stringr::words, "([a-df-z]).*\\1.*\\1")
+## we want words that use the same letter a-d + f-z 3 times anywhere
+##            skip over e!
+##      like before set the possible character to any letter a-z
+##      use \\1 again to back reference the previous letter twice 
+##      use .* to specify AND 
+```
+
+##### Question 5. 
+
+Using the sentences provided in stringr::sentences, find all words that come
+after a “number” like “one”, “two”, … “twelve”. Pull out both the number and 
+the word.
+```{r, question5}
+## first attempt (commented out)
+## written_nums <- c("one", "two","three", "four", "five", "six", "seven", 
+##              "eight", "nine", "ten")
+## num_match <- str_c(written_nums, collapse = "|")
+## has_num <- str_subset(stringr::sentences, num_match)
+## matches <- str_extract(has_num, num_match)
+## head(matches)
+## more <- sentences[str_count(sentences, num_match) > 1]
+## str_view(more, num_match)
+## THE PROBLEM ^^^ 
+##          this returns all numbers within other words 
+##          we want all numbers (not within another word)
+##          the word that follows the number 
+
+## second attempt: 
+
+num_as_word <- "\\b(zero|one|two|three|four|five|six|seven|eight|nine|ten
+                    eleven|twelve|twenty|thrity|fourty|fifty|sixty
+                    seventy|eighty|ninety|hundred) +(\\w+)"
+sentences[str_detect(sentences, num_as_word)] %>%
+  str_extract(num_as_word)
+
+## 1) specify the written numbers using \\b which matches word boundaries 
+##      the boundaries are the numbers written out 
+##      (\\w+) matches any "word" character following the number 
+```
+
+##### Question 6. 
+
+Using the sentences provided in stringr::sentences, view all sentences that
+contain the word “good” or the word “bad”. Get the sentence numbers where those
+words occur. Use str_replace_all() to replace the word “bad” with the word 
+“horrible” and the word “good” with the word “great”. Look at the sentence 
+numbers you found before to verify the words were replaced correctly.
+```{r, question6}
+## FIRST idea: (commented out)
+## bad_good <- "(\\w+) +\\b(good|bad) +(\\w+)"
+## sentences[str_detect(sentences, bad_good)] %>%
+##   str_extract_all(bad_good)
+## THE PROBLEM ^^^
+##      This does not return the whole sentences 
+##      This does not keep the sentence number 
+##      Remove the last line and it keeps the sentence intact
+##      BUT it still changes the sentences numbering 
+
+bad_good <- "(\\w+) +\\b(good|bad) +(\\w+)"
+bad_good_sent <- sentences[str_detect(sentences, bad_good)]
+## 1) detect for the words "bad" and "good" in sentences 
+bad_good_sent
+bad_good_sent <- str_c(bad_good_sent, collapse = "|")
+bad_good_sent
+## 2) collapse it into a single vector with | as the separator
+
+sentence <- as_tibble(sentences)
+## 3) convert  into a tibble so sentences are numbered 
+
+which(grepl(bad_good_sent, sentence$value))
+## 4) this returns the row number of the sentences that have "bad" or "good"
+
+## 5) use str_replace_all() 
+##    change bad to horrible 
+##    change good to great
+```
+

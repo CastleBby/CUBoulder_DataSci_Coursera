@@ -1,0 +1,199 @@
+---
+title: "Data_Analysis_Lab_Castelan"
+author: "Castelan Moreno, Emily"
+date: "2022-10-31"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(nycflights13)
+
+```
+
+##### Assignment Instructions
+
+Complete all questions below. After completing the assignment, knit your 
+document, and download both your .Rmd and knitted output. Upload your files for
+peer review. 
+
+For each response, include comments detailing your response and what each 
+line does. 
+
+---
+
+##### Question 1. 
+
+Using the nycflights13 dataset, find all flights that departed in July, August,
+or September using the helper function between(). 
+
+
+```{r, question1_response}
+## use a pipe to input the dataset, set an object that wills save our result
+july_to_sept <- flights %>% 
+  filter(between(month, 7, 9))
+## use a filter() followed by between()
+## define what is being filtered, the left lower end and, right upper end 
+## returns a tibble 86,326 x 19 
+
+total_with_canceled <- count(july_to_sept)
+## use a count to return the number of flights from july to sept. 
+## to account for flights that were canceled, 
+
+not_canceled <- flights %>%
+  filter(!is.na(dep_delay), !is.na(arr_delay))
+## create an object that store the result of filtering out flights with NA 
+## values for the arr_delay or dep_delay
+
+## now use this not_canceled to compare against our july to sept.filter 
+## store it in july_to_sept2
+july_to_sept2 <- not_canceled %>%
+  filter(between(month, 7, 9))
+
+## now compare the two different values, one accounting for canceled flights, 
+## and the other not 
+
+total_wo_canceled <- count(july_to_sept2)
+print(total_wo_canceled)
+
+## there are about 2,000 less flights from july to sept. when we account for 
+## the cancelled flights 
+  
+## divide the two to get the % 
+
+perct_same <- (total_wo_canceled / total_with_canceled)*100
+print(perct_same)
+
+```
+
+#### Question 2. 
+
+Using the nycflights13 dataset sort flights to find the 10 flights that flew the
+furthest. Put them in order of fastest to slowest.
+
+```{r, question2_response}
+## 1st, sort flights by air_time and store the result 
+furthest_bytime <- flights %>%
+  arrange(desc(distance)) %>% 
+  ## pipe that resulting table into a select() for the important variables
+     select(distance, air_time, year, month, day, flight) %>%
+  ## pipe that into a mutate() to create a new variable 
+  ## use distance = rate x time to solve for the rate and store it 
+  ##      therefore rate = distance / time 
+        mutate(rate = distance / air_time) %>% 
+  ## arrange the table in descending order by the new column rate 
+  arrange(desc(rate))
+## print only the top 10 using head()
+head(furthest_bytime, n = 10)
+
+```
+
+#### Question 3. 
+
+Using the nycflights13 dataset, calculate a new variable called "hr_delay" and 
+arrange the flights dataset in order of the arrival delays in hours (longest
+delays at the top). Put the new variable you created just before the departure 
+time.Hint: use the experimental argument .before. 
+
+```{r, question3_response}
+## first pipe the flights dataset into the 
+flights_hr_delay <- flights %>%
+  ## make a new variable called hr_delay which is the arr_delay in hours
+  mutate(hr_delay = arr_delay/60) %>% 
+  ## arrange that variable in descending order 
+  arrange(desc(hr_delay)) %>% 
+  ## reclocate the placement of hr_delay to before dep_delay
+  relocate(hr_delay, .before = dep_delay)
+  ## just to make things more clear round the values in hr_delay to 2 digits 
+  ## rewrite over hr_delay, specific the column in the dataset with $
+  flights_hr_delay$hr_delay <- round(flights_hr_delay$hr_delay, digit = 2)
+  
+  ## return the results 
+  print(flights_hr_delay)
+
+```
+
+##### Question 4.
+
+Using the nycflights13 dataset, find the most popular destinations 
+(those with more than 2000 flights) and show the destination, the date info, 
+the carrier. Then show just the number of flights for each popular destination.
+
+```{r, question4_response}
+flights_dest <- flights %>% 
+  ## group the flights by destination 
+  group_by(dest) %>% 
+  ## use filter() to filter for groups of destinations greater than 2000
+  filter(n() > 2000) %>%
+  ## show only the destination, the date info, the carrier 
+  select(year:day, dest, carrier)
+
+## at this point typing in "flights_dest"
+  ## this returns a tibble 302,969 x 5
+  ## groups: dest [46]
+## BUT WE WANT: 
+  ## SHOW JUST the number of flights for each popular destination 
+flights_dest %>%
+  summarize(count = n(), 
+            .groups = "drop_last") %>% 
+  arrange(desc(count))
+
+## We used summarize to collapse the data frame based on the number 
+##      of flights for each destination 
+## set count = n() to count by destination group 
+## arrange in descending order to check that all counts are greater that 
+## 2000 flights 
+```
+
+#### Question 5. 
+
+Using the nycflights13 dataset, find the flight information (flight number, 
+origin, destination, carrier, number of flights in the year, and percent late) 
+for the flight numbers with the highest percentage of arrival delays. Only
+include the flight numbers that have over 100 flights in the year.
+
+```{r, question5_response}
+flights_per_year <- not_canceled %>%
+  select(flight, arr_delay, origin, dest, carrier) %>%
+  group_by(flight) %>% 
+  summarize(count = n(), 
+            across()) %>% 
+  filter(count > 100) %>% 
+  ## find number of flights in year by flight number 
+  ## filter for only flights that have greater than 
+  ## 100 flights in a year
+  select(origin, dest, carrier, count, arr_delay, 
+         flight) %>% 
+  ## select only the information needed
+  
+  group_by(flight) %>%
+  mutate(
+    delay_total = sum(arr_delay), 
+    prop_delay = arr_delay / delay_total *100) %>% 
+  filter(delay_total != 0) %>%
+  filter(arr_delay > 0) %>%
+  arrange(desc(prop_delay), flight) 
+
+    
+## calculate the perct. arrival delay 
+## filter out cases where the flight was not delayed 
+## filter out cases that equal zero for delay_total
+## arrange by greatest proportion for arrival delay by flight
+
+
+flights_per_year
+
+
+```
+
+
+
+
+
+
+
+
+

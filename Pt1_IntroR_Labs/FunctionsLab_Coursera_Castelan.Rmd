@@ -1,0 +1,202 @@
+---
+title: "FunctionsLab_Castelan"
+author: "Castelan Moreno, Emily"
+date: "2022-10-03"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+##### Assignment Instructions
+
+Complete all questions below. After completing the assignment, knit your document, and download both your .Rmd and knitted output. Upload your files for peer review. 
+
+For each response, include comments detailing your response and what each line does. Ensure you test your functions with sufficient test cases to identify and correct any potential bugs.
+
+```{r setup, include=FALSE, error = TRUE}
+
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+
+```
+
+##### Question 1. 
+
+Review the roll functions from Section 2 in *Hands-On Programming in R*. Using these functions as an example, create a function that produces a histogram of 50,000 rolls of three 8 sided dice. Each die is loaded so that the number 7 has a higher probability of being rolled than the other numbers, assume all other sides of the die have a 1/10 probability of being rolled. 
+
+Your function should contain the arguments `max_rolls`, `sides`, and `num_of_dice`. You may wish to set some of the arguments to default values. 
+
+```{r, rigged_dice_function}
+
+# Creating a function which "rolls" 3 8-sided dice but they are weighted 
+# first assign a function that accepts 3 arguments, but set defaults for each
+rigged_dice <- function(max_rolls = 50000, sides = 1:8, num_of_dice = 3){
+  # set up a vector where the results will be stored through indexing 
+  output <- vector(mode = 'numeric', length = max_rolls)
+  # start the for loop index that goes to the length of desired rolls 
+  # via vectorization method 
+  for(i in 1:max_rolls){
+    # assign the sum of the desired sample generated to the empty vector 
+    # be sure to include [i] so we are iterating through the vector as we store 
+    # otherwise we would just be over writing the output with 
+    # each for loop iteration 
+      output[i] <- sum(sample(sides, num_of_dice, replace = TRUE,
+                 prob = c(1/10, 1/10, 1/10, 1/10, 1/10, 1/10, 3/10, 1/10)))}
+  # plot the results stored in the "output" vector 
+  hist(output)
+}
+
+# call the function 
+rigged_dice()
+```
+
+##### Question 2. 
+
+Write a function, rescale01(), that recieves a vector as an input and checks that the inputs are all numeric. If the input vector is numeric, map any -Inf and Inf values to 0 and 1, respectively. If the input vector is non-numeric, stop the function and return the message "inputs must all be numeric".
+
+Be sure to thoroughly provide test cases. Additionally, ensure to allow your response chunk to return error messages.
+
+```{r, rescale01_function, error = TRUE}
+
+# think of where the function should be stopped to check for numeric inputs
+    # obviously before any calculations are made
+# set up the rescale function to accept only one argument 
+rescale01 <- function(x){
+  # define the range which will be called multiple times at the min. & max below 
+  rng <- range(x, na.rm = TRUE, finite = TRUE)
+  # set a boolean that checks if x is NOT numeric, it negates the is.numeric()
+     if(!is.numeric(x))
+    stop('inputs must all be numeric')
+     # print the error message 
+     # continue function otherwise 
+  x <- (x - rng[1]) / (rng[2] - rng[1])
+  # account for the input argument being Inf or -Inf 
+  ifelse (x == Inf, atan(x)*(2/pi),
+  ifelse (x == -Inf, 1/(1+(x)), x))
+}
+
+# test cases: 
+# one vector with characters 
+charvalues <- c("dogs", "cats", "bunnies")
+rescale01(charvalues)
+# one vector with integers
+intvector <- (5:15)
+rescale01(intvector)
+# one vector with Inf and -Inf 
+Inf_vector <- c(10, 30, 4, 22, Inf, -Inf, Inf)
+rescale01(Inf_vector)
+# one vector with NA
+na_vector <- c(9, 4, NA, Inf, 39, NA)
+rescale01(na_vector)
+
+```
+
+##### Question 3.
+
+Write a function that takes two vectors of the same length and returns the number of positions that have an NA in both vectors. If the vectors are not the same length, stop the function and return the message "vectors must be the same length".
+
+```{r, same_na_function, error = TRUE}
+
+# first set up a function which accepts two arguments 
+same_na_position <- function(x,y){
+  # set up a counter vector to count and store the number of times 
+  # both i and j have an NA in the same position 
+  counter_vector<- c(0)
+  if(length(x) != length(y))
+    stop("vectors must be the same in length")
+  # set up two vectors that will check where the inputs x & y have NA values 
+  i <- which(is.na(x))
+  j <- which(is.na(y))
+  # use an ifelse to run a vectors,
+  # this will check where i is equal to j 
+  sum(ifelse(i == j, (counter_vector+1), counter_vector))
+}
+
+  # test cases 
+# this test checks that NA's are counted correctly 
+vector1 <- c(4, 7, NA, NA, NA, 8, 90, 8, NA)
+vector2 <- c(NA, 9, 70, NA, 8, 900, 8, NA, NA)
+same_na_position(vector1, vector2)
+
+# this test checks that the stop error message is printed 
+vector3 <- c(NA, 4, 9, 2)
+vector4 <- c(NA, 3, 90, NA, NA, NA)
+same_na_position(vector3, vector4)
+
+# cases work 
+```
+
+##### Question 4 
+
+Implement a fizzbuzz function. It takes a single number as input. If the number is divisible by three, it returns “fizz”. If it’s divisible by five it returns “buzz”. If it’s divisible by three and five, it returns “fizzbuzz”. Otherwise, it returns the number. 
+
+```{r, fizzbuzz_function}
+
+fizzbuzz <- function(x){
+    if(x%%3 == 0 && x%%5 == 0){
+  print("fizzbuzz")
+  } else if (x%%5 == 0 ){
+    print("buzz")
+  } else if (x %%3 == 0){
+    print("fizz")
+  } else (x)
+}
+
+# test cases  
+# a number that is divisible by both 
+fizzbuzz(15)
+# a number that is only divisible by 5
+fizzbuzz(5)
+# a number that is only divisible by 3
+fizzbuzz(3)
+# a number that is not by by either 3 nor 5
+fizzbuzz(1)
+
+# test cases work 
+
+```
+
+##### Question 5 
+
+Rewrite the function below using `cut()` to simplify the set of nested if-else statements. 
+```
+get_temp_desc <- function(temp) {
+  if (temp <= 0) {
+    "freezing"
+  } else if (temp <= 10) {
+    "cold"
+  } else if (temp <= 20) {
+    "cool"
+  } else if (temp <= 30) {
+    "warm"
+  } else {
+    "hot"
+  } 
+}
+
+```
+
+```{r, describe_temp_function}
+# function logic: 
+# we can divide the temperature input or set of temperatures inputs into 
+# 5 intervals, by using temperature as an argument we can set it 
+# as the first argument in the cut() 
+# then, define the breaks as desired, the lowest value is not included 
+# therefore the 0 is the top of the first interval and label "freezing" 
+# then label the labels, careful with syntax 
+
+get_temp_desc <- function(temp){
+    cut(temp, breaks = c(-Inf, 0, 10, 20, 30, Inf),
+      labels = c("freezing", "cold", "cool", "warm", "hot"))
+}
+# Test cases
+Jan <- c(-5, -20, 4, -.555, 0, 9)
+Jun <- c(40, 34, 28, 37, 80)
+Aug <- c( 10, 20, 18, 23, 2)
+# Run them 
+get_temp_desc(Jan)
+get_temp_desc(Jun)
+get_temp_desc(Aug)
+
+```
+

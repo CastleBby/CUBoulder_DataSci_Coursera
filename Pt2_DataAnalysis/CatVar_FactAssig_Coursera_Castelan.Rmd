@@ -1,0 +1,216 @@
+---
+title: "CatVar_FactAssig_Castelan"
+author: "Castelan Moreno, Emily"
+date: "2022-11-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(stringr)
+library(tidyverse)
+library(forcats)
+library(ggplot2)
+```
+
+# Please complete all the tasks listed below. After completing the tasks download the .Rmd file and upload in the peer review item for grading.
+
+# Additionally please write text between the code chunks explaining what each code chunk is about.
+
+# Refer the linked online textbook in case of any issues.
+
+
+1.From the "forcats" library load gss_cat data. Explore the distribution of 
+rincome (reported income). What makes the default bar chart hard to understand? 
+How could you improve the plot?
+```{r, question1}
+## insepct the database (commented out)
+## view(gss_cat)
+## view the default bar chart 
+## using rincome as the independent variable
+## the labels are not consistent 
+ggplot(gss_cat, aes(rincome))+
+  geom_bar()
+## we can see that the default bar chart is hard to understand because 
+## the labels for income brackets are layered over one another 
+## the values are so different that the values count >2000 are hard to gauge
+## TO IMPROVE THE PLOT: 
+##    1) move the labels to be vertical or angled to be legible 
+##    2) rename the columns to be more consistent 
+##    3) why is there a NA and a separate No answer? 
+##       remove the NA because it throws off the other data 
+##    4) rename the x and y axis 
+##    5) reorder the columns from don't know, to least, to most 
+rep_income_plot <- gss_cat %>%
+  filter(!rincome %in% c("Not applicable")) %>%
+    mutate(rincome = fct_recode(rincome, 
+                              "Less than $1000" = "Lt $1000")) %>%
+  ggplot(aes(rincome))+
+  geom_bar()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_discrete("Reported Income in $") + 
+  scale_y_continuous("Number of Respondents") 
+
+rep_income_plot
+
+
+
+```
+
+
+2. What is the most common religion? What is the most common partyid?
+
+
+```{r, question2}
+## part 1
+pop_relig <- gss_cat %>%
+  group_by(relig) %>%
+  summarize(relig_count = n()) %>%
+  arrange(desc(relig_count))
+
+pop_relig
+## 1) group_by to focus on one column for calculations
+## 2) use summarize and n() to count the observations based on the group 
+## PROTESTANT is the most common religion
+
+## part 2
+pop_party <- gss_cat %>% 
+  group_by(partyid) %>%
+  summarize(party_count = n()) %>%
+  arrange(desc(party_count)) %>%
+  head(1)
+
+pop_party
+## 1) group_by to focus on the partyid column 
+## 2) summarize, just like in the top code 
+## 3) arrange the new column in descending order 
+## 4) use head() to only print out the most common partyid 
+## Independent is the most popular
+  
+```
+3.Which relig does denom (denomination) apply to? How can you find out with a
+table? How can you find out with a visualisation?
+
+```{r, question3}
+## first we can see denom is a column 
+## so let's view that column using levels()
+levels(gss_cat$denom)
+## I don't know anything about religious denominations so I had to google this 
+## but anyways apparently these are denom is for protestant 
+## we can prove this using this table:
+pop_denom <- gss_cat %>%
+  group_by(denom, relig) %>%
+  summarize(denom_count = n()) %>%
+  arrange(desc(denom_count)) %>%
+  filter(denom != "Not applicable") %>%
+  filter(denom != "No denomination") %>%
+  filter(denom != "No answer") %>%
+  filter(denom != "Don't know")
+pop_denom
+## 1) first group by denom and religion
+## 2) use count just to put some order to it 
+## 3) rearrange in descending order 
+## 4) filter out the religons where denom is not applicable 
+## 5) inspect the table we can see the religion is protestant 
+
+## now let's visualize this 
+
+denom_plot <- gss_cat %>%
+  group_by(denom, relig) %>%
+  summarise(denom_count = n())
+denom_plot %>%
+  ggplot(aes(x = relig, y = denom, size = denom_count)) + 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90)) 
+
+denom_plot
+
+## 1) use the same group+by and summarize code block 
+## 2) plot those results 
+## 3) I tried color and size to show the counted denom_count, but size shows 
+##    the results the best 
+## 4) Showing once again that denomination is used for the Protestant religon
+
+```
+
+4.How have the proportions of people identifying as Democrat, Republican,
+and Independent changed over time? Plot a suitable chart.
+```{r, question4}
+## first organize the data 
+party_history <- gss_cat %>%
+  group_by(year, partyid) %>%
+  summarise(party_count = n()) 
+
+party_history %>%
+  ggplot(aes(x = year, y = party_count, color = partyid)) + 
+  geom_point() +
+  geom_line()
+  
+party_history
+
+## HOWEVER the question says Democrat, Republican and Independent
+## so let's collapse the party affilication observations into those categories
+## ALSO it asked for the proportion so we need to turn it into percentage 
+
+party_simple <- gss_cat %>%
+ mutate(
+    partyid2 =
+      fct_collapse(partyid,
+        other = c("No answer", "Don't know", "Other party"),
+        republican = c("Strong republican", "Not str republican"),
+        independent = c("Ind,near rep", "Independent", "Ind,near dem"),
+        democrat = c("Not str democrat", "Strong democrat")
+      )
+  ) 
+## 1) custom define the groups using fct_collapse()
+party_simple <- party_simple %>% 
+  group_by(year, partyid2) %>%
+  summarise(party_count2 = n()) %>%
+  mutate(party_proportion = party_count2/sum(party_count2))
+## 2) group by year and party id and get a cound using summarize
+## 3) mutate a new column that calcuates the proportion 
+##    based on the party_count, party_count/total(party_count)
+
+party_simple %>% 
+  ggplot(aes(x = year, y = party_proportion, color = partyid2))+
+  geom_point()+
+  geom_line()
+## 4) plot the results 
+## 5) use geom_line to connect the points across the years 
+
+## overtime, 
+## independent has increased a little 
+## democrat has stayed relatively level 
+## republican has decreased
+## and other has seen the least amount of change
+```
+5.Collapse "rincome" into smaller set of categories?
+```{r, question5}
+## first inspect rincome levels 
+levels(gss_cat$rincome) 
+## rename the levels manually
+rincome_simple <- gss_cat %>%
+  mutate(
+    rincome2 = 
+      fct_collapse(rincome, 
+                   'Unknown' = c("No answer", "Don't know", "Refused", 
+                               "Not applicable"), 
+                   'Less than $10000' = c("Lt $1000", "$1000 to 2999",
+                                         "$3000 to 3999", "$4000 to 4999", 
+                                         "$5000 to 5999",  "$6000 to 6999",
+                                         "$7000 to 7999", "$8000 to 9999"), 
+                  '$1000 - $19999' = c("$10000 - 14999", "$15000 - 19999"),
+                  '$20000 to 24999' = c("$20000 - 24999"),
+                  'more than $25000' = c("$25000 or more")
+      )
+  )
+## plot the new rincome using a bar graph
+
+  rincome_simple %>%
+    ggplot(aes(x = rincome2)) +
+    geom_bar()
+
+
+
+```
+

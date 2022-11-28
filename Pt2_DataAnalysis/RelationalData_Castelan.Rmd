@@ -1,0 +1,237 @@
+---
+title: "RelationalData_Castelan"
+author: "Castelan Moreno, Emily"
+date: "2022-11-04"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(Lahman)
+library(ggplot2)
+library(maps)
+library(nasaweather)
+```
+
+
+##### Assignment Instructions
+
+Complete all questions below. After completing the assignment, knit your document, and download both your .Rmd and knitted output. Upload your files for peer review. 
+
+For each response, include comments detailing your response and what each line does. Ensure you test your functions with sufficient test cases to identify and correct any potential bugs.
+
+##### Question 1.
+
+Identify the primary keys in the following datasets. Be sure to show that you have the primary key by showing there are no duplicate entries.
+
+Lahman::Batting
+babynames::babynames
+nasaweather::atmos
+
+```{r, question1}
+library(maps)
+## load in Lahman::Batting to inspect, commented out
+## view(Batting) 
+## now find the primary key 
+Batting %>% 
+  count(playerID, yearID, stint) %>%
+  filter(n > 1)
+## this returns a 0 x 4 so it a primary key
+
+
+## load in babynames dataset to inspect 
+fileUrl_babynames <- "https://raw.githubusercontent.com/hadley/babynames/master/data-raw/babynames_sample.csv?acessType=DOWNLOAD"
+
+if(!file.exists("Data")){dir.create("Data")}
+
+download.file(fileUrl_babynames, destfile = "Data/babynames.csv")
+
+(dateDownloaded <- date())
+
+babynames <- read_csv(fileUrl_babynames)
+
+babynames
+## I downloaded it from github because install.packages("babynames") did not 
+## work 
+
+##now identify the primary keys 
+babynames %>% 
+  count(name, year, sex) %>%
+filter(n > 1)
+## this returns a 0 x 3 therefore it is a primary key 
+
+##load in atmos dataset to inspect, commented out
+## view(atmos)
+## first idea nasaweather::atmos %>%
+  ## count(lat, long, pressure) %>% 
+  ## filter(n > 0)
+nasaweather::atmos %>% 
+  count(lat, long, year, month) %>% 
+  filter(n > 1)
+## this returns a 0 x 5 so it is a primary key 
+
+
+```
+
+##### Question 2.
+
+What is the relationship between the "Batting", "Master", and "Salaries" tables in the "Lahman" package? What are the keys for each dataset and how do they relate to each other?
+
+```{r, question2}
+## load each dataset to inspect 
+## view(Batting)
+## there is no "Master" dataset in the package
+## will use "People" table instead
+## view(Salaries)
+## view(People)
+
+## by looking at the 3 tables I can seee that 
+## 1) Batting and Salaries have playerID, teamID, IgID, & yearID in common
+## 2) People has playerID like the Batting and Salaries 
+## People primary key: playerID
+  ## foreign key: playerID with Batting and Salaries
+## Batting primary key: playerID, stint, yearID
+  ## foreign key: playerID with Master playerID
+## Salaries primary key: playerID, teamID, yearID
+  ## foreign key: playerID with Master playerID
+
+
+```
+
+##### Question 3.
+
+Load the "nycflights13" library. Use an appropriate join to add a column containing the airline name to the "flights" dataset present in the library. Be sure to put the carrier code and name in the first two columns of the result so we can see them. Save the result as "flights2".
+
+```{r, question3}
+library(nycflights13)
+## load the package in 
+flights2 <- flights %>% 
+  left_join(airlines, by = "carrier") %>%
+  select(carrier, name, everything())
+
+flights2
+  
+## left join with the airlines dataset by carrier because it is the 
+## common key 
+## arrange the dataset with carrier and name at the front 
+
+```
+
+
+##### Question 4.
+
+Use an appropriate join to add the airport name to the "flights2" dataset you got above. The codes and names of the airports are in the "airports" dataset of the "nycflights13" package. Put the carrier and carrier name first followed by the destination and destination name, then everything else.
+
+```{r, question4}
+## create a new dataset and input flights2 
+## left_join() with airports because we want to keep all observations in flight2
+##      use "Dest" = "faa" as the key 
+##      found in both tables that we want to align the other columns based on 
+## then, use full_join() with a consolidated airports_join datase 
+
+airports_join <- airports %>%
+  select(faa, name, lat, lon)
+
+flights3 <- flights2 %>% 
+  left_join(airports_join,
+            by = c("dest" = "faa")
+           )
+
+## now rearrange flights3 using select() + everything()
+
+
+flights3 <- flights3 %>% 
+  select(carrier, name.x, dest, name.y, everything())
+
+
+
+## create the condensed airports_join for the full_join 
+airports_join <- airports_join %>% 
+  select(faa, name)
+
+## let's also add in the names for the origin for the extra credit 
+flights3 <- flights3 %>% 
+  full_join(
+    airports_join, 
+    by = c("origin" = "faa")
+  )
+
+## rearrange to put our columns we created at the front
+flights3 <- flights3 %>%
+rename(carrier_name = name.x) %>%
+  rename(dest_airport = name.y) %>%
+  rename(origin_airport = name) %>%
+  select(carrier, 
+         carrier_name,
+         dest,
+         dest_airport,
+         origin,
+         origin_airport,
+         everything())
+
+flights3
+
+
+```
+
+
+##### Question 5.
+
+The "nycflights13" library and the code to create spatial map is provided for you. Now compute the average delay by destination, then join on the airports dataframe so you can show the spatial distribution of delays.
+
+* Use the size or colour of the points to display the average delay for each airport.
+* Add the location of the origin and destination (i.e. the lat and lon) to flights.
+* Compute the average delay by destination.
+
+
+```{r, question5}
+## run the spatial map code 
+
+library(nycflights13)
+
+airports %>%
+  semi_join(flights, c("faa" = "dest")) %>%
+  ggplot(aes(lon, lat)) +
+    borders("state") +
+    geom_point() +
+    coord_quickmap()
+## compute the average daley by destination 
+## 1) first group flights database by destination 
+## 2) use summarize to find the avg. 
+## 3) use an inner_join() to 
+avg_delay_dest <- flights %>%
+  group_by(dest) %>% 
+  summarize(delay = mean(arr_delay, na.rm = TRUE)) %>%
+  ## use na.rm = TRUE to ignore NA values where flights were cancelled
+  inner_join(airports, by = c("dest" = "faa"))
+
+## 4) now input the ggplot, aes, borders, and geom_plot arguments 
+avg_delay_dest %>% 
+  ggplot(aes(lon, lat, color = delay))+
+  ## this will provide a gradation because it is a cont. variable 
+  borders("state")+
+  geom_point()+
+  coord_quickmap()
+
+```
+
+##### Question 6.
+
+Use a set operation function to find which airport codes from flights are not 
+in the airports dataset.
+
+```{r, question6}
+
+diff_names <- setdiff(flights$dest, airports$faa)
+diff_names
+length(diff_names)
+## there are 4 codes for which there are no airport names in "airports"
+```
+
+
+
+
+

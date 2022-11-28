@@ -1,0 +1,82 @@
+---
+title: "datavisualization_castelan"
+author: "Castelan Moreno, Emily"
+date: "2022-10-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# QUESTION 1
+
+```{r, question1_response}
+
+## mycode: 
+ggplot(data = mpg, mapping = aes( x = displ, y = hwy))+
+  geom_point()+
+  geom_smooth(se = FALSE)
+
+## 1st, in order to reduce repitition set global mappings
+## 2nd, with the exception of se = FALSE set to local geom_smooth
+
+```
+
+# QUESTION 2
+
+```{r, question2_response}
+## My code:
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy))+
+  geom_point(mapping = aes(color = drv)) +
+  geom_smooth(se = FALSE)
+
+## 1st set dataset and  global mapping that is applied to both geoms
+## 2nd set up geom_point() with the color as drv to separate the shape groups
+## 3rd set geom_smooth without the confidence bands
+```
+
+# QUESTION 3
+
+```{r, question3_response}
+## My code:
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy))+
+  geom_point(mapping = aes(color = drv))+
+  geom_smooth(mapping = aes(linetype = drv), se = FALSE)
+
+## 1st, set dataset and global mapping
+## 2nd, geom_point local, use color = drv to separate shape by variable
+## 3rd, geom_smooth local, use linetype = drv to set 3 types
+## 4th, se = FALSE outside of aes() to remove confidence band
+
+```
+
+# QUESTION 4
+
+```{r, question4_response}
+## My code:
+ggplot(data = mpg, mapping = aes(x = cty, y = hwy))+
+  geom_point(mapping = aes(color = class), position = "jitter")
+ 
+## 1st, set dataset and global mappings
+## 2nd, use geom_point to plot a scatterplot
+## 3rd, specify aes() color = class this sets color of shape and + legend
+## 4th, the scatter is overlapping... so use position adjustment,
+##      this is outside of aes() and as a string
+```
+
+# QUESTION 5
+
+```{r, question5_response}
+## My code:
+ggplot(data = mpg, mapping = aes(x = hwy, y = cyl))+
+  geom_point(shape = "triangle", color = "orange", position = "identity")+
+  facet_wrap(~class, nrow = 3)
+
+## 1st, set dataset and global mappings
+## 2nd, specify shape, color, and position as strings for geom_point
+## 3rd, use facet_wrap to separate by class
+## 4th, set number of rows to 3
+```
+

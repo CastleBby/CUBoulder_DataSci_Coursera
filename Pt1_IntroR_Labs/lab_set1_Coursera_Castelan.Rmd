@@ -1,0 +1,207 @@
+---
+title: "PracticeProblemsSet1_Castelan"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+```
+
+# Review Sections 2.1-2.5 from Hands-On Programming in R 
+1. Summary of what I learned: 
+  colon operator : , returns every integer between two integers 
+  ls() , function which prnts object names already used 
+  R uses element-wise execution by default 
+  If R is provided two vectors of unequal lengths, it will repeat the shorter 
+  until it is the same length of the longer vector, this is called 
+  vector recycling 
+  Matrix operators: 
+    %*% inner multiplication, dot product 
+    %o% outter multiplication 
+  look up function's arguments with, args(name_of_function)
+  sample with replacement:
+    sample(die, size = 5, replace = TRUE)
+    created independent random samples, otherwise default is without 
+    replacement for a sample 
+  arguments can be set to defaults as opposed to specified for each time 
+  the function is called 
+    functions can have as many arguments as needed/desired 
+2. Add a second chunk to your document that contains the roll2 functions.
+   Knit your document to be sure it does not have errors. 
+```{r, Roll2Function}
+# function which randomly generates the sum or "dice" which is in this case 
+# "bones" the argument which is specified as values 1 through 20 
+# by randomly selecting two values without replacement for each selection 
+# from the sample (set of potential outputs)
+roll2 <- function(bones = 1:20){
+  dice <- sample(bones, size = 2, replace = FALSE)
+  sum(dice)
+}
+```
+   
+3. Think about what sort of inputs should be allowed for roll2 and write in 
+text section what the input must look like. Test roll2 both without and input 
+to be sure the default is used as well as with several different inputs. Be 
+sure your document shows the results of your tests when it is knitted. 
+
+```{r, Roll2Tests, error = TRUE}
+# the function above roll2, requires bones to: 
+# 1) have at least two values because the size = 2 
+# 2) cannot be a character type, must be numeric type 
+# 3) sample cannot take a sample larger than the population when replace = FALSE
+#    therefore bones cannot equal Inf 
+
+# Demonstrating different tests of inputs for argument bones
+# Test 1 without specifiying a default 
+
+roll2 <- function(bones = 1:20){
+  dice <- sample(bones, size = 2, replace = FALSE)
+  sum(dice)
+}
+roll2()
+
+# Test 2, bones as a character argument 
+roll2(bones = c("dog", "bunny", "cat"))
+
+# Test 3, bones as infinity 
+roll2(bones = Inf)
+
+# Test 4, bones as a value less than size 2
+roll2(bones = 1)
+
+```
+
+# Review Sections 3.1-3.4 from Hands-On Programming in R 
+## and complete the following exercises: 
+
+1. In a new code chunk in your Rmd file, produce a histogram of 50,000 rolls 
+of three 8-sides fair dice
+
+```{r, FairDiceFunction}
+# set up a function which takes the type of dice as an argument, but we set 
+# the default to an 8 sided die, then in the sample we specify the parameters
+
+RollDice <- function(Die8Sided = 1:8){
+  dice8Sided <- sample(Die8Sided, size = 3, replace = TRUE)
+  sum(dice8Sided)
+}
+
+# Use replicate to execute the function 50,000 times and store it in a vector 
+
+NumberofRolls <- replicate(50000, RollDice())
+
+# use qplot to create a histogram wih the NumberofRolls
+qplot(NumberofRolls, binwidth = 1)
+
+
+```
+2. Then do the same thing where the dice are loaded so that the number 7
+has a higher probability of being rolled than the other numbers, assume all the
+numbers have a 1/10 probability of being rolled 
+
+```{r, RiggedDice}
+# first set up the function which takes the type of dice as an argument 
+
+RiggedDice <- function (WeightedDice = 1:8){
+  DiceWeighted <- sample(WeightedDice, size = 3, replace = TRUE, 
+    prob = c(1/10, 1/10, 1/10, 1/10, 1/10, 1/10, 3/10, 1/10))
+  sum(DiceWeighted)
+}
+
+# We will plot this function as well to see if it is executing correctly
+# use qplot to create a histogram wih the RiggedDice
+# first replicate the results 10000x to plug into histogram
+
+RiggedDiceRolls <- replicate(10000, RiggedDice())
+
+qplot(RiggedDiceRolls, binwidth = 1)
+
+```
+
+
+# 1. Rewrite the rescale01() function such that -inf is mapped to 0 and Inf is mapped to 1
+```{r, rescale01, echo = TRUE}
+
+#first set up the data frame, using the tibble function which is just a type of
+# data frame in the tibble package 
+# input vectors a, b, c, and d 
+# within each vector use rnorm, which generates random numbers using a normal 
+#   bell curve distribution 
+# r norm syntax ----> rnom(n, mean, sd)
+#   n = the number of random variables to generate 
+#   mean = if not specified defaults to 0 
+#   sd = the standard deviation, defaults to 1
+
+df <- tibble::tibble(
+  a = rnorm(10),
+  b = rnorm(10),
+  c = rnorm(10),
+  d = rnorm(10)
+)
+
+# Next, write the function to normalize the data 
+# the only input is x, which will correspond to each vector a-d
+# we can set range as a function "rng" which returns the range of x
+#   we set na.rm = TRUE, meaning it will return NA from the calculation 
+#   if an NA is input into the data frame
+# lastly, inputing rng[1] means minimum and inputing rng[2] means maximum
+#   which are in this case 0 and 1 
+
+rescale01 <- function(x){
+ rng <- range(x, na.rm = TRUE, finite = TRUE)
+ (x-rng[1])/(rng[2]-rng[1])
+ifelse (x == Inf, atan(x)*(2/pi),
+  ifelse (x == -Inf, 1/(1+(x)), x))
+}
+
+# These modifications were made to the same function above after: 
+# now we want to write the rescale01 function such the -Inf is mapped to 0 
+# and Inf is mapped to 1 
+# first set finite = TRUE 
+# Then write two ifelse statements, because they accept vectors unlike 
+# else if and if statements that require for loops to run vectors 
+# THEN nest one ifelse, notice the syntax if left open on first ifelse
+# finally, close both 
+# note, using formulas that we know will return the desired values for scaling
+
+# Test run the modified function 
+y <- c(-Inf, -0.5, 3, 7, 100, Inf, .6, NA, NA)
+rescale01(y)
+# it works finally! 
+```
+# 2. Write both_na(), a function that takes two vectors of the same length
+# and returns the number of positions that have an NA in both vectors 
+
+```{r, both_na_function}
+# both_na will begin by being a function with two inputs 
+# in the body we will pass arguments that set NA to true and checks for NA 
+# Then when the position of NA matches between the two vectors, it will count 
+# the total number of NA's 
+
+# test cases 
+vector1 <- c(4, 7, NA, NA, NA, 8, 90, 8, NA)
+vector2 <- c(NA, 9, 70, NA, 8, 900, 8, NA, NA)
+counter_vector<- c(0)
+
+
+both_na <- function(x, y){
+  i <- which(is.na(x))
+  j <- which(is.na(y))
+  sum(ifelse(i == j, (counter_vector+1), counter_vector))
+}
+
+# recap of function 
+# use which() to first determine where the NA values are (position) and store
+# ifelse, to run both i & j vectors, count where the NA are in same position
+#   if the vectors are the same, add 1 to the counter, if not keep the same
+#   finally, run the sum
+
+# run the test vectors
+both_na(vector1, vector2)
+
+
+```
